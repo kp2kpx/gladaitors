@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -7,6 +7,7 @@ import { formatUnits } from "viem";
 import Image from "next/image";
 import sdk from "@farcaster/miniapp-sdk";
 import WalletButton from "@/components/WalletButton";
+import Footer from "@/components/Footer";
 import { PIT_ARENA_ABI, PIT_ARENA_ADDRESS } from "@/lib/contract";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
 
@@ -14,7 +15,7 @@ export default function Home() {
   const router = useRouter();
   const { isAuthed, address, pfpUrl, username } = useFarcasterAuth();
 
-  // Signal to Farcaster client that the app is ready — hides the splash screen.
+  // Signal to Farcaster client that the app is ready â€” hides the splash screen.
   useEffect(() => {
     sdk.actions.ready().catch(() => {});
   }, []);
@@ -31,12 +32,12 @@ export default function Home() {
   }, [refetch]);
 
   return (
-    <div className="arena-bg min-h-screen">
+    <div className="arena-bg min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <div className="arena-title text-2xl">GLADAITORS</div>
         <div className="flex items-center gap-3">
           <WalletButton />
-          {/* Profile avatar — clickable, navigates to /profile */}
+          {/* Profile avatar â€” clickable, navigates to /profile */}
           <button
             onClick={() => router.push("/profile")}
             className="flex items-center gap-2 rounded-full border border-gray-700 hover:border-amber-600 transition-colors px-2 py-1"
@@ -81,14 +82,14 @@ export default function Home() {
             onClick={() => router.push("/create")}
             disabled={!isAuthed}
           >
-            + Create Paid Fight
+            + Create Match
           </button>
           <button
             className="btn-secondary text-base py-3 px-8"
             onClick={() => router.push("/free-fight")}
             disabled={!isAuthed}
           >
-            FREE FIGHT
+            FREE MATCH
           </button>
         </div>
         {!isAuthed && (
@@ -110,12 +111,12 @@ export default function Home() {
         <div>
           <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
-            OPEN FIGHTS
+            Open Matches
           </h2>
 
           {!openIds || openIds.length === 0 ? (
             <div className="text-center py-12 border border-dashed border-gray-800 rounded-lg">
-              <p className="text-gray-600">No open fights. Be the first to enter the pit.</p>
+              <p className="text-gray-600">No open matches. Be the first to enter the pit.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -132,6 +133,7 @@ export default function Home() {
         </div>
 
       </main>
+      <Footer />
     </div>
   );
 }
@@ -163,12 +165,12 @@ function MatchRow({
       style={{ cursor: isOwn ? "default" : "pointer" }}
     >
       <div>
-        <div className="text-xs text-gray-500 mb-1">Fight #{matchId.toString()}</div>
+        <div className="text-xs text-gray-500 mb-1">Match #{matchId.toString()}</div>
         <div className="text-sm text-gray-300 font-mono">
           {player1.slice(0, 8)}...{player1.slice(-4)}
         </div>
         {isOwn && (
-          <div className="text-xs text-amber-500 mt-0.5">Your fight - waiting for opponent</div>
+          <div className="text-xs text-amber-500 mt-0.5">Your match - waiting for opponent</div>
         )}
       </div>
       <div className="text-right">
@@ -184,3 +186,5 @@ function MatchRow({
     </div>
   );
 }
+
+

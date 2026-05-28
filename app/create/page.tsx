@@ -6,6 +6,7 @@ import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 
 import { parseUnits } from "viem";
 import StatAllocator from "@/components/StatAllocator";
 import WalletButton from "@/components/WalletButton";
+import Footer from "@/components/Footer";
 import {
   PIT_ARENA_ABI,
   PIT_ARENA_ADDRESS,
@@ -128,14 +129,14 @@ export default function CreateMatch() {
 
   if (step === "done" && createdMatchId) {
     return (
-      <div className="arena-bg min-h-screen">
+      <div className="arena-bg min-h-screen flex flex-col">
         <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
           <button onClick={() => router.push("/")} className="arena-title text-xl">
             GLADAITORS
           </button>
           <WalletButton />
         </header>
-        <main className="max-w-lg mx-auto px-6 py-16 text-center">
+        <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
           <div className="text-5xl mb-6">FIGHT CREATED</div>
           <p className="text-gray-400 mb-2">Fight ID</p>
           <div className="text-4xl font-bold text-amber-400 mb-6">#{createdMatchId}</div>
@@ -158,12 +159,13 @@ export default function CreateMatch() {
             </button>
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
 
   return (
-    <div className="arena-bg min-h-screen">
+    <div className="arena-bg min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <button onClick={() => router.push("/")} className="arena-title text-xl">
           GLADAITORS
@@ -171,7 +173,7 @@ export default function CreateMatch() {
         <WalletButton />
       </header>
 
-      <main className="max-w-lg mx-auto px-6 py-10">
+      <main className="flex-1 max-w-lg mx-auto w-full px-6 py-10">
         <h1 className="text-2xl font-bold text-white uppercase tracking-widest mb-2">
           Enter the Pit
         </h1>
@@ -238,6 +240,7 @@ export default function CreateMatch() {
           </p>
         )}
       </main>
+      <Footer />
     </div>
   );
 }

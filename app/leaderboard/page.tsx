@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import WalletButton from "@/components/WalletButton";
+import Footer from "@/components/Footer";
 
 interface PointRecord {
   wallet: string;
@@ -44,7 +45,7 @@ export default function Leaderboard() {
   }, []);
 
   return (
-    <div className="arena-bg min-h-screen">
+    <div className="arena-bg min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <button onClick={() => router.push("/")} className="arena-title text-xl">
           GLADAITORS
@@ -52,7 +53,7 @@ export default function Leaderboard() {
         <WalletButton />
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-10">
+      <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-10">
         {/* Airdrop banner */}
         <div
           className="rounded-xl p-5 mb-8 border text-center"
@@ -65,7 +66,7 @@ export default function Leaderboard() {
             Weekly Airdrop
           </div>
           <p className="text-white font-bold text-lg">
-            Weekly GLADAITOR token airdrop â€” top fighters earn $GLADAITOR.
+            Weekly GLADAITOR token airdrop &mdash; top fighters earn $GLADAITOR.
           </p>
           <p className="text-amber-400 text-sm mt-1">
             Next drop:{" "}
@@ -140,7 +141,7 @@ export default function Leaderboard() {
                           : "#6b7280",
                     }}
                   >
-                    {rank === 1 ? "ðŸ‘‘" : rank}
+                    {rank === 1 ? "👑" : rank}
                   </span>
                   <span className="text-sm font-mono text-gray-300">
                     {entry.wallet.slice(0, 6)}...{entry.wallet.slice(-4)}
@@ -195,7 +196,7 @@ export default function Leaderboard() {
           </button>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }
-

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import WalletButton from "@/components/WalletButton";
+import Footer from "@/components/Footer";
 import StatAllocator from "@/components/StatAllocator";
 import CastGate from "@/components/CastGate";
 import { GladiatorStats, TOTAL_POINTS } from "@/lib/contract";
@@ -87,14 +88,14 @@ export default function FreeFightCreate() {
         : `https://gladaitors.vercel.app/free-fight/${createdMatchId}`;
 
     return (
-      <div className="arena-bg min-h-screen">
+      <div className="arena-bg min-h-screen flex flex-col">
         <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
           <button onClick={() => router.push("/")} className="arena-title text-xl">
             GLADAITORS
           </button>
           <WalletButton />
         </header>
-        <main className="max-w-lg mx-auto px-6 py-16 text-center">
+        <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
           <div className="text-4xl font-bold text-amber-400 mb-2">FREE FIGHT CREATED</div>
           <p className="text-gray-400 text-sm mb-8">
             Share this link with your opponent. They cast their entry, configure their gladiator,
@@ -126,12 +127,13 @@ export default function FreeFightCreate() {
             </button>
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
 
   return (
-    <div className="arena-bg min-h-screen">
+    <div className="arena-bg min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <button onClick={() => router.push("/")} className="arena-title text-xl">
           GLADAITORS
@@ -139,7 +141,7 @@ export default function FreeFightCreate() {
         <WalletButton />
       </header>
 
-      <main className="max-w-lg mx-auto px-6 py-10">
+      <main className="flex-1 max-w-lg mx-auto w-full px-6 py-10">
         <div className="flex items-center gap-3 mb-2">
           <span className="bg-green-900 text-green-400 text-xs font-bold uppercase tracking-widest px-2 py-1 rounded">
             FREE
@@ -190,6 +192,7 @@ export default function FreeFightCreate() {
           </p>
         )}
       </main>
+      <Footer />
     </div>
   );
 }

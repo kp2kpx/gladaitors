@@ -3,6 +3,7 @@
 import { use, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import WalletButton from "@/components/WalletButton";
+import Footer from "@/components/Footer";
 import StatAllocator from "@/components/StatAllocator";
 import CastGate from "@/components/CastGate";
 import { simulateFight, FightResult } from "@/lib/fight-engine";
@@ -228,9 +229,9 @@ export default function FreeFightRoom({
 
   if (view === "configure") {
     return (
-      <div className="arena-bg min-h-screen">
+      <div className="arena-bg min-h-screen flex flex-col">
         <Header router={router} />
-        <main className="max-w-lg mx-auto px-6 py-10">
+        <main className="flex-1 max-w-lg mx-auto w-full px-6 py-10">
           <div className="flex items-center gap-3 mb-2">
             <span className="bg-green-900 text-green-400 text-xs font-bold uppercase tracking-widest px-2 py-1 rounded">
               FREE FIGHT
@@ -258,6 +259,7 @@ export default function FreeFightRoom({
             </p>
           )}
         </main>
+        <Footer />
       </div>
     );
   }
@@ -277,9 +279,9 @@ export default function FreeFightRoom({
         : `https://gladaitors.vercel.app/free-fight/${matchId}`;
 
     return (
-      <div className="arena-bg min-h-screen">
+      <div className="arena-bg min-h-screen flex flex-col">
         <Header router={router} />
-        <main className="max-w-lg mx-auto px-6 py-16 text-center">
+        <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
           <div className="text-3xl font-bold text-amber-400 mb-2">WAITING FOR OPPONENT</div>
           <p className="text-gray-400 text-sm mb-6">
             Share this link. The fight resolves the moment they join.
@@ -295,6 +297,7 @@ export default function FreeFightRoom({
           </button>
           <p className="text-gray-600 text-xs animate-pulse">Checking for opponent...</p>
         </main>
+        <Footer />
       </div>
     );
   }
