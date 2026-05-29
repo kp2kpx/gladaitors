@@ -1,9 +1,12 @@
 // PitArena contract config — deployed on Base Sepolia
-export const PIT_ARENA_ADDRESS = "0xf2eaAa680f035Ff9C23Dcb0ad455c27fB9E92C9D" as const;
+// v2: pull-payment model with claimWinnings() / claimFor()
+export const PIT_ARENA_ADDRESS = "0xF0FD952101E4082Bdcf3e364abFd102312d083ef" as const;
 
 export const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const;
 
 export const BASE_SEPOLIA_CHAIN_ID = 84532;
+
+export const HOUSE_ADDRESS = "0x96DB9B3E56b2EE4E58c21c41a1F93Ae7B7b73B2F" as const;
 
 export const PIT_ARENA_ABI = [
   // Read
@@ -53,6 +56,13 @@ export const PIT_ARENA_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "pendingWithdrawals",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
   // Write
   {
     inputs: [{ internalType: "uint256", name: "betAmount", type: "uint256" }],
@@ -85,6 +95,22 @@ export const PIT_ARENA_ABI = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  {
+    // Self-claim — winner pays their own gas
+    inputs: [],
+    name: "claimWinnings",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    // House-sponsored claim — only HOUSE address can call, gas paid by house
+    inputs: [{ internalType: "address", name: "winner", type: "address" }],
+    name: "claimFor",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
   // Events
   {
     anonymous: false,
@@ -111,8 +137,18 @@ export const PIT_ARENA_ABI = [
       { indexed: true, internalType: "uint256", name: "matchId", type: "uint256" },
       { indexed: true, internalType: "address", name: "winner", type: "address" },
       { indexed: false, internalType: "uint8", name: "rounds", type: "uint8" },
+      { indexed: false, internalType: "uint256", name: "winnerPayout", type: "uint256" },
     ],
     name: "FightResolved",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "winner", type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "WinningsClaimed",
     type: "event",
   },
 ] as const;
@@ -179,6 +215,6 @@ export const STAT_DESCRIPTIONS: Record<keyof GladiatorStats, string> = {
   luck: "Crit chance",
 };
 
-export const TOTAL_POINTS = 20;
+export const TOTAL_POINTS = 25;
 export const MAX_STAT = 10;
 export const MIN_STAT = 1;

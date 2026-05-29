@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,10 @@ import {
 } from "wagmi";
 import { formatUnits } from "viem";
 import WalletButton from "@/components/WalletButton";
+import Footer from "@/components/Footer";
 import StatAllocator from "@/components/StatAllocator";
+import FightReplay from "@/components/FightReplay";
+import FightSummary from "@/components/FightSummary";
 import {
   PIT_ARENA_ABI,
   PIT_ARENA_ADDRESS,
@@ -18,6 +21,7 @@ import {
   TOTAL_POINTS,
   STAT_LABELS,
 } from "@/lib/contract";
+import { simulateFight, FightResult } from "@/lib/fight-engine";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
 
 export default function MatchPage({ params }: { params: Promise<{ matchId: string }> }) {
@@ -28,6 +32,10 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
 
   const [error, setError] = useState<string | null>(null);
   const [sharedFight, setSharedFight] = useState(false);
+  // Replay state for paid fights
+  const [replayResult, setReplayResult] = useState<FightResult | null>(null);
+  const [showReplay, setShowReplay] = useState(false);
+  const [replayDone, setReplayDone] = useState(false);
 
   // Read match data - poll every 5s
   const { data: matchData, refetch: refetchMatch } = useReadContract({
@@ -57,7 +65,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
   }, [refetchMatch]);
 
   const [pendingStats, setPendingStats] = useState<GladiatorStats>({
-    strength: 4, speed: 4, defense: 4, intel: 4, luck: 4,
+    strength: 5, speed: 5, defense: 5, intel: 5, luck: 5,
   });
   const pendingStatsValid = Object.values(pendingStats).reduce((a, b) => a + b, 0) === TOTAL_POINTS;
 
@@ -73,7 +81,11 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
   const { isLoading: resolveConfirming, isSuccess: resolveSuccess } =
     useWaitForTransactionReceipt({ hash: resolveTxHash });
 
-  if (resolveSuccess) refetchMatch();
+  // When resolve succeeds — refetch then trigger replay
+  useEffect(() => {
+    if (!resolveSuccess) return;
+    refetchMatch();
+  }, [resolveSuccess, refetchMatch]);
 
   if (!matchData) {
     return (
@@ -113,6 +125,21 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
     });
   }
 
+  function triggerReplay() {
+    if (!g1Data || !g2Data) return;
+    const s1: GladiatorStats = {
+      strength: g1Data[0], speed: g1Data[1], defense: g1Data[2],
+      intel: g1Data[3], luck: g1Data[4],
+    };
+    const s2: GladiatorStats = {
+      strength: g2Data[0], speed: g2Data[1], defense: g2Data[2],
+      intel: g2Data[3], luck: g2Data[4],
+    };
+    const result = simulateFight(s1, s2);
+    setReplayResult(result);
+    setShowReplay(true);
+  }
+
   async function handleShare(won: boolean) {
     const statsStr = g1Data
       ? `STR:${g1Data[0]} SPD:${g1Data[1]} DEF:${g1Data[2]}`
@@ -129,18 +156,96 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
       await fetch("/api/points/award", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          wallet: address,
-          action: "share_fight_result",
-          matchId,
-        }),
+        body: JSON.stringify({ wallet: address, action: "share_fight_result", matchId }),
       }).catch(() => {});
       setSharedFight(true);
     }
   }
 
+  // Resolved + replay shown
+  if (state === MatchState.Resolved && showReplay && replayResult && g1Data && g2Data) {
+    if (!replayDone) {
+      return (
+        <div className="arena-bg min-h-screen flex flex-col">
+          <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+            <button onClick={() => router.push("/")} className="arena-title text-xl">
+              GLADAITORS
+            </button>
+            <WalletButton />
+          </header>
+          <main className="flex-1 flex items-center justify-center px-4 py-8">
+            <div className="w-full max-w-sm">
+              <FightReplay
+                result={replayResult}
+                p1Label={`${player1.slice(0, 6)}...${player1.slice(-4)}`}
+                p2Label={`${player2.slice(0, 6)}...${player2.slice(-4)}`}
+                viewerRole={isPlayer1 ? "p1" : isPlayer2 ? "p2" : "spectator"}
+                onDone={() => setReplayDone(true)}
+                onHome={() => router.push("/")}
+              />
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    // Replay done — show summary with on-chain winner as authoritative
+    const onChainWinnerIsP1 = winner.toLowerCase() === player1.toLowerCase();
+    const viewerRole = isPlayer1 ? "p1" : isPlayer2 ? "p2" : "spectator";
+    const s1: GladiatorStats = {
+      strength: g1Data[0], speed: g1Data[1], defense: g1Data[2],
+      intel: g1Data[3], luck: g1Data[4],
+    };
+    const s2: GladiatorStats = {
+      strength: g2Data[0], speed: g2Data[1], defense: g2Data[2],
+      intel: g2Data[3], luck: g2Data[4],
+    };
+
+    // No FID stored for paid fights — just use a clean fallback
+    const opponentLabelPaid = "your opponent";
+
+    return (
+      <div className="arena-bg min-h-screen flex flex-col">
+        <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+          <button onClick={() => router.push("/")} className="arena-title text-xl">
+            GLADAITORS
+          </button>
+          <WalletButton />
+        </header>
+        <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
+          <FightSummary
+            result={replayResult}
+            p1Label={`${player1.slice(0, 6)}...${player1.slice(-4)}`}
+            p2Label={`${player2.slice(0, 6)}...${player2.slice(-4)}`}
+            p1Stats={s1}
+            p2Stats={s2}
+            isP1Winner={onChainWinnerIsP1}
+            viewerRole={viewerRole}
+            opponentName={viewerRole === "spectator" ? "your opponent" : opponentLabelPaid}
+            onShare={() => handleShare(winner.toLowerCase() === address?.toLowerCase())}
+            shareLabel={sharedFight ? "Shared!" : winner.toLowerCase() === address?.toLowerCase() ? "Share Your Victory" : "Share Your Battle"}
+            sharedAlready={sharedFight}
+            onHome={() => router.push("/")}
+            pointsLine={
+              winner.toLowerCase() === address?.toLowerCase() ? (
+                <button
+                  onClick={() => router.push("/profile")}
+                  className="text-green-400 font-bold underline"
+                >
+                  +{formatUnits((betAmount * 2n * 90n) / 100n, 6)} USDC &rarr; Claim on Profile
+                </button>
+              ) : null
+            }
+          />
+          <PaidFightPointsAwarder address={address ?? null} matchId={matchId} winner={winner} />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
-    <div className="arena-bg min-h-screen">
+    <div className="arena-bg min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <button onClick={() => router.push("/")} className="arena-title text-xl">
           GLADAITORS
@@ -148,7 +253,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
         <WalletButton />
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-10">
+      <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-xl font-bold text-white uppercase tracking-widest">
             Fight #{matchId}
@@ -265,20 +370,43 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
         )}
 
         {/* RESOLVED */}
-        {state === MatchState.Resolved && (
-          <div className="space-y-6">
+        {state === MatchState.Resolved && !showReplay && (
+          <div className="space-y-4">
             <div className="bg-amber-950 border border-amber-600 rounded-lg p-6 text-center winner-glow">
               <div className="text-xs text-amber-400 uppercase tracking-widest mb-2">Winner</div>
               <div className="text-3xl font-bold text-white font-mono mb-1">
                 {winner.slice(0, 8)}...{winner.slice(-4)}
               </div>
               {winner.toLowerCase() === address?.toLowerCase() && (
-                <div className="text-amber-400 font-bold text-lg mt-2">That&apos;s you. Well fought.</div>
+                <>
+                  <div className="text-amber-400 font-bold text-lg mt-2">That&apos;s you. Well fought.</div>
+                  <div className="text-2xl font-bold text-green-400 mt-1">
+                    +{formatUnits((betAmount * 2n * 90n) / 100n, 6)} USDC
+                  </div>
+                  <button
+                    className="mt-3 px-5 py-2 rounded-lg text-sm font-bold uppercase tracking-widest transition-all"
+                    style={{
+                      background: "linear-gradient(135deg, #16a34a, #15803d)",
+                      color: "#d1fae5",
+                      border: "1px solid #166534",
+                    }}
+                    onClick={() => router.push("/profile")}
+                  >
+                    Claim Winnings on Profile
+                  </button>
+                </>
               )}
-              <div className="text-2xl font-bold text-amber-400 mt-2">
-                +{formatUnits((betAmount * 2n * 90n) / 100n, 6)} USDC
-              </div>
             </div>
+
+            {/* Watch replay button if we have gladiator data */}
+            {g1Data && g1Data[5] && g2Data && g2Data[5] && (
+              <button
+                className="btn-primary w-full"
+                onClick={triggerReplay}
+              >
+                Watch Fight Replay
+              </button>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <PlayerCard
@@ -299,14 +427,12 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
               />
             </div>
 
-            {/* Points awarder */}
             <PaidFightPointsAwarder
               address={address ?? null}
               matchId={matchId}
               winner={winner}
             />
 
-            {/* Share CTA - prominent button, Continue is just a text link */}
             <button
               className="btn-secondary w-full text-center block"
               onClick={() =>
@@ -339,6 +465,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
           </button>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }
@@ -423,7 +550,6 @@ function PlayerCard({
   );
 }
 
-// Awards paid fight points once per resolved match, fire-and-forget
 function PaidFightPointsAwarder({
   address,
   matchId,
@@ -451,7 +577,6 @@ function PaidFightPointsAwarder({
         body: JSON.stringify({ wallet: w, action: "paid_fight_won", matchId }),
       }).catch(() => {});
     }
-  // Only run once when component mounts (resolved state renders this once)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

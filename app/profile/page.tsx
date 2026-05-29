@@ -8,9 +8,10 @@ import { baseSepolia } from "viem/chains";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
 import { PIT_ARENA_ABI, PIT_ARENA_ADDRESS, ERC20_ABI, USDC_ADDRESS } from "@/lib/contract";
 import type { FreeMatch } from "@/lib/kv";
+import Footer from "@/components/Footer";
 
 // --------------------------------------------------------------------------
-// Viem public client — Base Sepolia, used for balance reads and event logs
+// Viem public client — Base Sepolia
 // --------------------------------------------------------------------------
 const publicClient = createPublicClient({
   chain: baseSepolia,
@@ -30,7 +31,9 @@ interface OnChainMatch {
   winner: string;
   role: "p1" | "p2";
   result: "WIN" | "LOSS" | "PENDING";
-  usdcDelta: string; // signed, e.g. "+1.80" or "-1.00"
+  usdcDelta: string;
+  // winnerPayout from FightResolved event (only set for WINs, else 0n)
+  winnerPayout: bigint;
 }
 
 interface Balances {
@@ -79,17 +82,29 @@ export default function ProfilePage() {
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [loadingFree, setLoadingFree] = useState(true);
 
-  // --- Load balances ---
+  // Claim state
+  const [pendingUSDC, setPendingUSDC] = useState<bigint>(0n);
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimTxHash, setClaimTxHash] = useState<string | null>(null);
+
+  // --- Load balances + pending withdrawal amount ---
   const loadBalances = useCallback(async () => {
     if (!address) return;
     setLoadingBalances(true);
     try {
-      const [ethRaw, usdcRaw, leaderboard] = await Promise.all([
+      const [ethRaw, usdcRaw, pendingRaw, leaderboard] = await Promise.all([
         publicClient.getBalance({ address: address as `0x${string}` }),
         publicClient.readContract({
           address: USDC_ADDRESS,
           abi: ERC20_ABI,
           functionName: "balanceOf",
+          args: [address as `0x${string}`],
+        }) as Promise<bigint>,
+        publicClient.readContract({
+          address: PIT_ARENA_ADDRESS,
+          abi: PIT_ARENA_ABI,
+          functionName: "pendingWithdrawals",
           args: [address as `0x${string}`],
         }) as Promise<bigint>,
         fetch("/api/points/leaderboard").then((r) => r.json()),
@@ -106,6 +121,8 @@ export default function ProfilePage() {
         usdc: parseFloat(formatUnits(usdcRaw, 6)).toFixed(2),
         points: myRecord?.points ?? 0,
       });
+
+      setPendingUSDC(pendingRaw ?? 0n);
     } catch (e) {
       console.error("loadBalances error", e);
     } finally {
@@ -113,14 +130,13 @@ export default function ProfilePage() {
     }
   }, [address]);
 
-  // --- Load on-chain match history via events ---
+  // --- Load on-chain match history ---
   const loadOnChainMatches = useCallback(async () => {
     if (!address) return;
     setLoadingMatches(true);
     try {
       const addr = address.toLowerCase() as `0x${string}`;
 
-      // Fetch MatchCreated events where player1 = me
       const [createdLogs, joinedLogs, resolvedLogs] = await Promise.all([
         publicClient.getLogs({
           address: PIT_ARENA_ADDRESS,
@@ -160,6 +176,7 @@ export default function ProfilePage() {
               { indexed: true, name: "matchId", type: "uint256" },
               { indexed: true, name: "winner", type: "address" },
               { indexed: false, name: "rounds", type: "uint8" },
+              { indexed: false, name: "winnerPayout", type: "uint256" },
             ],
           },
           fromBlock: BigInt(0),
@@ -167,16 +184,18 @@ export default function ProfilePage() {
         }),
       ]);
 
-      // Build a map of matchId -> winner from FightResolved
-      const resolvedMap = new Map<string, string>();
+      // Build a map of matchId -> { winner, winnerPayout } from FightResolved
+      const resolvedMap = new Map<string, { winner: string; payout: bigint }>();
       for (const log of resolvedLogs) {
-        const args = log.args as { matchId?: bigint; winner?: string };
+        const args = log.args as { matchId?: bigint; winner?: string; winnerPayout?: bigint };
         if (args.matchId !== undefined && args.winner) {
-          resolvedMap.set(args.matchId.toString(), args.winner.toLowerCase());
+          resolvedMap.set(args.matchId.toString(), {
+            winner: args.winner.toLowerCase(),
+            payout: args.winnerPayout ?? 0n,
+          });
         }
       }
 
-      // Collect all match IDs I was in
       const myMatchIds = new Set<string>();
       const roleMap = new Map<string, "p1" | "p2">();
 
@@ -197,7 +216,6 @@ export default function ProfilePage() {
         }
       }
 
-      // Fetch each match's on-chain state
       const matchDetails = await Promise.all(
         Array.from(myMatchIds).map(async (id) => {
           try {
@@ -219,18 +237,20 @@ export default function ProfilePage() {
         if (!entry) continue;
         const [player1, player2, betAmount, state, winner] = entry.data;
         const role = roleMap.get(entry.id) ?? "p1";
-        const winnerLower = resolvedMap.get(entry.id) ?? winner.toLowerCase();
-        const isResolved = state === 3; // MatchState.Resolved
+        const resolved = resolvedMap.get(entry.id);
+        const winnerLower = resolved?.winner ?? winner.toLowerCase();
+        const isResolved = state === 3;
 
         let result: OnChainMatch["result"] = "PENDING";
         let usdcDelta = "0.00";
+        let winnerPayout = 0n;
 
         if (isResolved && winnerLower) {
           const iWon = winnerLower === address.toLowerCase();
           result = iWon ? "WIN" : "LOSS";
-          const payout = (betAmount * 2n * 90n) / 100n;
+          winnerPayout = resolved?.payout ?? (betAmount * 2n * 90n) / 100n;
           usdcDelta = iWon
-            ? `+${formatUnits(payout - betAmount, 6)}`
+            ? `+${formatUnits(winnerPayout - betAmount, 6)}`
             : `-${formatUnits(betAmount, 6)}`;
         }
 
@@ -244,10 +264,10 @@ export default function ProfilePage() {
           role,
           result,
           usdcDelta,
+          winnerPayout,
         });
       }
 
-      // Sort by match ID desc (higher = more recent)
       parsed.sort((a, b) => Number(b.matchId) - Number(a.matchId));
       setOnChainMatches(parsed);
     } catch (e) {
@@ -285,6 +305,35 @@ export default function ProfilePage() {
     }
   }, [isAuthed, fid, loadFreeMatches]);
 
+  // --- Claim all winnings (house-sponsored via /api/claim) ---
+  async function handleClaim() {
+    if (!address || claiming) return;
+    setClaiming(true);
+    setClaimError(null);
+    setClaimTxHash(null);
+    try {
+      const res = await fetch("/api/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner: address }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setClaimError(data.error ?? "Claim failed");
+      } else {
+        setClaimTxHash(data.txHash);
+        // Refresh balances to reflect the new USDC balance
+        await loadBalances();
+        // Update pending to 0 immediately in state
+        setPendingUSDC(0n);
+      }
+    } catch (e) {
+      setClaimError(String(e));
+    } finally {
+      setClaiming(false);
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Render
   // --------------------------------------------------------------------------
@@ -297,8 +346,13 @@ export default function ProfilePage() {
     );
   }
 
+  // Unclaimed wins: resolved matches where I won, used for per-fight breakdown
+  const unclaimedWins = onChainMatches.filter(
+    (m) => m.result === "WIN" && pendingUSDC > 0n
+  );
+
   return (
-    <div className="arena-bg min-h-screen">
+    <div className="arena-bg min-h-screen flex flex-col">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <button onClick={() => router.push("/")} className="arena-title text-xl">
@@ -312,7 +366,7 @@ export default function ProfilePage() {
         </button>
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-8">
+      <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-8">
 
         {/* === SECTION 1: Identity === */}
         <div
@@ -356,7 +410,85 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* === SECTION 2: Balances === */}
+        {/* === SECTION 2: Unclaimed Winnings === */}
+        {(pendingUSDC > 0n || claimTxHash) && (
+          <div
+            className="rounded-xl p-5 mb-6 border"
+            style={{
+              background: "linear-gradient(135deg, #0d1f0a 0%, #0a1a07 100%)",
+              borderColor: pendingUSDC > 0n ? "#2d6a1e" : "#1a3a12",
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-xs text-green-600 uppercase tracking-widest font-bold mb-1">
+                  Unclaimed Winnings
+                </div>
+                <div className="text-3xl font-bold text-green-400 tabular-nums">
+                  {formatUnits(pendingUSDC, 6)} USDC
+                </div>
+                <div className="text-xs text-green-700 mt-0.5">Ready to claim &bull; Gas free</div>
+              </div>
+              <button
+                onClick={handleClaim}
+                disabled={claiming || pendingUSDC === 0n}
+                className="px-6 py-3 rounded-lg font-bold text-sm uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background: claiming || pendingUSDC === 0n
+                    ? "#1a3a12"
+                    : "linear-gradient(135deg, #16a34a, #15803d)",
+                  color: "#d1fae5",
+                  border: "1px solid #166534",
+                }}
+              >
+                {claiming ? "Claiming..." : "Claim All"}
+              </button>
+            </div>
+
+            {/* Per-fight breakdown */}
+            {unclaimedWins.length > 0 && (
+              <div className="space-y-2 border-t border-green-900 pt-3 mt-1">
+                {unclaimedWins.map((m) => {
+                  const opponent =
+                    m.role === "p1"
+                      ? shortAddrOrEmpty(m.player2) ?? "Opponent"
+                      : shortAddr(m.player1);
+                  return (
+                    <div key={m.matchId} className="flex items-center justify-between text-sm">
+                      <div className="text-green-700">
+                        Fight #{m.matchId} vs <span className="font-mono text-green-600">{opponent}</span>
+                      </div>
+                      <div className="text-green-400 font-bold font-mono">
+                        +{formatUnits(m.winnerPayout, 6)} USDC
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {claimError && (
+              <div className="mt-3 text-xs text-red-400 bg-red-950 border border-red-900 rounded p-2">
+                {claimError}
+              </div>
+            )}
+            {claimTxHash && (
+              <div className="mt-3 text-xs text-green-500">
+                Claimed!{" "}
+                <a
+                  href={`https://sepolia.basescan.org/tx/${claimTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  View tx
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* === SECTION 3: Balances === */}
         <div className="mb-6">
           <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-3">
             Balances
@@ -423,7 +555,7 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* === SECTION 3: Fight History === */}
+        {/* === SECTION 4: Fight History === */}
         <div>
           <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-3">
             Fight History
@@ -551,14 +683,11 @@ export default function ProfilePage() {
                     const opponentDisplay = opponentWallet
                       ? shortAddr(opponentWallet)
                       : "Waiting for opponent";
+                    const myWallet = address?.toLowerCase();
 
-                    // Determine result from state
-                    let result: "WIN" | "LOSS" | "PENDING" = "PENDING";
-                    if (m.state === "resolved" && m.stats1 && m.stats2) {
-                      // Re-derive winner client-side isn't reliable without fight engine here.
-                      // We mark as PENDING on profile and link to match for details.
-                      // The fight engine result is stored in the match log on the fight page.
-                      result = "PENDING";
+                    let freeResult: "WIN" | "LOSS" | "PENDING" = "PENDING";
+                    if (m.state === "resolved" && m.winner && myWallet) {
+                      freeResult = m.winner === myWallet ? "WIN" : "LOSS";
                     }
 
                     return (
@@ -572,7 +701,10 @@ export default function ProfilePage() {
                             <span className="text-xs text-green-700 bg-green-950 border border-green-900 rounded px-1.5 py-0.5 font-bold uppercase tracking-widest">
                               FREE
                             </span>
-                            <FreeStateBadge state={m.state} />
+                            {m.state === "resolved"
+                              ? <ResultBadge result={freeResult} />
+                              : <FreeStateBadge state={m.state} />
+                            }
                           </div>
                           <span className="text-xs text-gray-600 font-mono">
                             {formatDate(m.createdAt)}
@@ -594,6 +726,7 @@ export default function ProfilePage() {
           )}
         </div>
       </main>
+      <Footer />
     </div>
   );
 }
