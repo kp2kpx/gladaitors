@@ -9,6 +9,7 @@ import {
 } from "wagmi";
 import { formatUnits } from "viem";
 import WalletButton from "@/components/WalletButton";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import StatAllocator from "@/components/StatAllocator";
 import FightReplay from "@/components/FightReplay";
@@ -167,12 +168,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
     if (!replayDone) {
       return (
         <div className="arena-bg min-h-screen flex flex-col">
-          <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-            <button onClick={() => router.push("/")} className="arena-title text-xl">
-              GLADAITORS
-            </button>
-            <WalletButton />
-          </header>
+          <Navbar><WalletButton /></Navbar>
           <main className="flex-1 flex items-center justify-center px-4 py-8">
             <div className="w-full max-w-sm">
               <FightReplay
@@ -206,12 +202,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
 
     return (
       <div className="arena-bg min-h-screen flex flex-col">
-        <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <button onClick={() => router.push("/")} className="arena-title text-xl">
-            GLADAITORS
-          </button>
-          <WalletButton />
-        </header>
+        <Navbar><WalletButton /></Navbar>
         <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
           <FightSummary
             result={replayResult}
@@ -246,12 +237,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
 
   return (
     <div className="arena-bg min-h-screen flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <button onClick={() => router.push("/")} className="arena-title text-xl">
-          GLADAITORS
-        </button>
-        <WalletButton />
-      </header>
+      <Navbar><WalletButton /></Navbar>
 
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
         <div className="flex items-center justify-between mb-2">

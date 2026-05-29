@@ -1,11 +1,12 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from "wagmi";
 import { parseUnits } from "viem";
 import StatAllocator from "@/components/StatAllocator";
 import WalletButton from "@/components/WalletButton";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import {
   PIT_ARENA_ABI,
@@ -18,12 +19,40 @@ import {
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
 
 const DEFAULT_STATS: GladiatorStats = {
-  strength: 4,
-  speed: 4,
-  defense: 4,
-  intel: 4,
-  luck: 4,
+  strength: 5,
+  speed: 5,
+  defense: 5,
+  intel: 5,
+  luck: 5,
 };
+
+const FIGHT_TYPE = "paid";
+
+function lsKey(wallet: string) {
+  return `gladaitor_last_stats_${FIGHT_TYPE}_${wallet.toLowerCase()}`;
+}
+
+function loadSavedStats(wallet: string): GladiatorStats | null {
+  try {
+    const raw = localStorage.getItem(lsKey(wallet));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as GladiatorStats;
+    // Validate shape
+    const keys: (keyof GladiatorStats)[] = ["strength", "speed", "defense", "intel", "luck"];
+    if (keys.every((k) => typeof parsed[k] === "number")) return parsed;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function saveStats(wallet: string, stats: GladiatorStats) {
+  try {
+    localStorage.setItem(lsKey(wallet), JSON.stringify(stats));
+  } catch {
+    // ignore
+  }
+}
 
 type Step = "configure" | "approving" | "creating" | "done";
 
@@ -36,6 +65,13 @@ export default function CreateMatch() {
   const [step, setStep] = useState<Step>("configure");
   const [createdMatchId, setCreatedMatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Load last-used stats from localStorage when wallet is available
+  useEffect(() => {
+    if (!address) return;
+    const saved = loadSavedStats(address);
+    if (saved) setStats(saved);
+  }, [address]);
 
   const betAmount = parseUnits(betAmountStr || "0", 6);
   const statsValid = Object.values(stats).reduce((a, b) => a + b, 0) === TOTAL_POINTS;
@@ -99,6 +135,9 @@ export default function CreateMatch() {
     if (!address || !isAuthed) return;
     setError(null);
 
+    // Persist this build so the allocator pre-fills next time
+    saveStats(address, stats);
+
     try {
       const needsApproval = !allowance || allowance < betAmount;
 
@@ -130,12 +169,7 @@ export default function CreateMatch() {
   if (step === "done" && createdMatchId) {
     return (
       <div className="arena-bg min-h-screen flex flex-col">
-        <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <button onClick={() => router.push("/")} className="arena-title text-xl">
-            GLADAITORS
-          </button>
-          <WalletButton />
-        </header>
+        <Navbar><WalletButton /></Navbar>
         <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
           <div className="text-5xl mb-6">FIGHT CREATED</div>
           <p className="text-gray-400 mb-2">Fight ID</p>
@@ -166,12 +200,7 @@ export default function CreateMatch() {
 
   return (
     <div className="arena-bg min-h-screen flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <button onClick={() => router.push("/")} className="arena-title text-xl">
-          GLADAITORS
-        </button>
-        <WalletButton />
-      </header>
+      <Navbar><WalletButton /></Navbar>
 
       <main className="flex-1 max-w-lg mx-auto w-full px-6 py-10">
         <h1 className="text-2xl font-bold text-white uppercase tracking-widest mb-2">
@@ -206,7 +235,12 @@ export default function CreateMatch() {
           <label className="block text-xs text-gray-400 uppercase tracking-widest mb-4">
             Gladiator Stats
           </label>
-          <StatAllocator stats={stats} onChange={setStats} disabled={isBusy} />
+          <StatAllocator
+            stats={stats}
+            onChange={setStats}
+            disabled={isBusy}
+            onReset={() => setStats(DEFAULT_STATS)}
+          />
         </div>
 
         {error && (

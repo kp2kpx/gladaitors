@@ -30,6 +30,9 @@ export interface FreeMatch {
     intel: number;
     luck: number;
   };
+  // Winner persisted after client-side simulation resolves
+  winner?: string;    // wallet address of winner
+  winnerFid?: number;
   createdAt: number;
 }
 
@@ -168,4 +171,31 @@ export async function getLeaderboard(): Promise<PointRecord[]> {
   return Object.values(all)
     .sort((a, b) => b.points - a.points)
     .slice(0, 50);
+}
+
+// --------------------------------------------------------------------------
+// Paid-fight points deduplication
+// Prevents re-awarding points if the fight result screen is refreshed.
+// TTL matches share-tracking: 7 days.
+// --------------------------------------------------------------------------
+
+const POINTS_AWARDED_TTL = 60 * 60 * 24 * 7; // 7 days
+
+export async function hasPointsAwarded(
+  action: string,
+  matchId: string,
+  wallet: string
+): Promise<boolean> {
+  const key = `points_awarded:${action}:${matchId}:${wallet.toLowerCase()}`;
+  const v = await kv.get(key);
+  return v !== null;
+}
+
+export async function markPointsAwarded(
+  action: string,
+  matchId: string,
+  wallet: string
+): Promise<void> {
+  const key = `points_awarded:${action}:${matchId}:${wallet.toLowerCase()}`;
+  await kv.set(key, 1, { ex: POINTS_AWARDED_TTL });
 }

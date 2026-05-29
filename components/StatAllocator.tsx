@@ -13,6 +13,7 @@ interface Props {
   stats: GladiatorStats;
   onChange: (stats: GladiatorStats) => void;
   disabled?: boolean;
+  onReset?: () => void;
 }
 
 const STAT_ICONS: Record<keyof GladiatorStats, string> = {
@@ -23,7 +24,7 @@ const STAT_ICONS: Record<keyof GladiatorStats, string> = {
   luck: "LCK",
 };
 
-export default function StatAllocator({ stats, onChange, disabled }: Props) {
+export default function StatAllocator({ stats, onChange, disabled, onReset }: Props) {
   const used = Object.values(stats).reduce((a, b) => a + b, 0);
   const remaining = TOTAL_POINTS - used;
 
@@ -104,6 +105,18 @@ export default function StatAllocator({ stats, onChange, disabled }: Props) {
           </div>
         );
       })}
+
+      {/* Reset to default — low-visibility, session-only, does not clear localStorage */}
+      {onReset && !disabled && (
+        <div className="text-center mt-2">
+          <button
+            onClick={onReset}
+            className="text-xs text-gray-600 hover:underline focus:outline-none"
+          >
+            reset to default
+          </button>
+        </div>
+      )}
     </div>
   );
 }

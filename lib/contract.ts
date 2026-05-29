@@ -1,14 +1,52 @@
 // PitArena contract config — deployed on Base Sepolia
-// v2: pull-payment model with claimWinnings() / claimFor()
-export const PIT_ARENA_ADDRESS = "0xF0FD952101E4082Bdcf3e364abFd102312d083ef" as const;
+// v4: house cut auto-swapped USDC→ETH via Uniswap V3 (SwapRouter02, USDC/WETH 0.05% pool)
+//     ReentrancyGuard on resolve/claim. Swap fallback: on failure USDC credited to
+//     pendingWithdrawals[houseWallet] + HouseSwapFailed event emitted.
+//     NOTE: SwapRouter02 address differs between Sepolia (0x94cC0AA...) and mainnet (0x2626664c...).
+//           The deployed contract uses the Sepolia address. Update before mainnet deploy.
+// Deployed 2026-05-29 — owner: 0xeC37F40D691E895a8e9f23343D1f17979A3f988c (cold)
+//                      houseWallet: 0x27811E4b87507424b6f682b4dCAF1fd9759b2AE6 (Vercel)
+export const PIT_ARENA_ADDRESS = "0x47BCEc4b1c00e6C87A5A4CDAda86E0Ec1bc6461C" as const;
 
 export const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const;
 
 export const BASE_SEPOLIA_CHAIN_ID = 84532;
 
-export const HOUSE_ADDRESS = "0x96DB9B3E56b2EE4E58c21c41a1F93Ae7B7b73B2F" as const;
+// House wallet — receives 10% fee cut and sponsors claimFor() gas.
+// This is the HOT wallet. Key lives in Vercel HOUSE_PRIVATE_KEY only.
+// Deployer/owner (cold key) is separate — see contracts/.env DEPLOYER_PRIVATE_KEY.
+export const HOUSE_ADDRESS = "0x27811E4b87507424b6f682b4dCAF1fd9759b2AE6" as const;
 
 export const PIT_ARENA_ABI = [
+  // Admin — owner (cold wallet) only
+  {
+    inputs: [],
+    name: "owner",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "houseWallet",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "_newWallet", type: "address" }],
+    name: "setHouseWallet",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "_newOwner", type: "address" }],
+    name: "transferOwnership",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
   // Read
   {
     inputs: [{ internalType: "uint256", name: "matchId", type: "uint256" }],
@@ -138,8 +176,19 @@ export const PIT_ARENA_ABI = [
       { indexed: true, internalType: "address", name: "winner", type: "address" },
       { indexed: false, internalType: "uint8", name: "rounds", type: "uint8" },
       { indexed: false, internalType: "uint256", name: "winnerPayout", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "houseEth", type: "uint256" },
     ],
     name: "FightResolved",
+    type: "event",
+  },
+  {
+    // Emitted when Uniswap swap fails — house cut stays as USDC in pendingWithdrawals[houseWallet]
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "matchId", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "houseCutUsdc", type: "uint256" },
+    ],
+    name: "HouseSwapFailed",
     type: "event",
   },
   {

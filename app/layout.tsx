@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import MuteButton from "@/components/MuteButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,10 +35,14 @@ export default function RootLayout({
       style={{ width: "100%", maxWidth: "100%", overflowX: "hidden" }}
     >
       <body
-        className="min-h-full flex flex-col bg-black text-white"
+        className="min-h-full flex flex-col"
         style={{ width: "100%", maxWidth: "100%", overflowX: "hidden" }}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          {/* Mute button — fixed top-right, always accessible */}
+          <MuteButton />
+          {children}
+        </Providers>
       </body>
     </html>
   );

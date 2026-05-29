@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import WalletButton from "@/components/WalletButton";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 interface PointRecord {
@@ -46,12 +47,7 @@ export default function Leaderboard() {
 
   return (
     <div className="arena-bg min-h-screen flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <button onClick={() => router.push("/")} className="arena-title text-xl">
-          GLADAITORS
-        </button>
-        <WalletButton />
-      </header>
+      <Navbar><WalletButton /></Navbar>
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-10">
         {/* Airdrop banner */}

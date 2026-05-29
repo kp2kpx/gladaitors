@@ -5,6 +5,7 @@ import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "@/lib/wagmi-config";
 import { MiniKitProvider } from "@coinbase/onchainkit/minikit";
 import { useState } from "react";
+import { AudioProvider } from "@/lib/useAudio";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -16,7 +17,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
             auto-connects the Farcaster wagmi connector when inside
             a Farcaster client (Warpcast etc). No-ops gracefully in browser. */}
         <MiniKitProvider enabled={true} autoConnect={true}>
-          {children}
+          {/* AudioProvider wraps the entire app so any component can access
+              shared audio state (mute toggle, sfx) without prop-drilling */}
+          <AudioProvider>
+            {children}
+          </AudioProvider>
         </MiniKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

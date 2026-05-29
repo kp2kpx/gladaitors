@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -7,6 +7,7 @@ import { formatUnits } from "viem";
 import Image from "next/image";
 import sdk from "@farcaster/miniapp-sdk";
 import WalletButton from "@/components/WalletButton";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { PIT_ARENA_ABI, PIT_ARENA_ADDRESS } from "@/lib/contract";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
@@ -15,7 +16,7 @@ export default function Home() {
   const router = useRouter();
   const { isAuthed, address, pfpUrl, username } = useFarcasterAuth();
 
-  // Signal to Farcaster client that the app is ready â€” hides the splash screen.
+  // Signal to Farcaster client that the app is ready — hides the splash screen.
   useEffect(() => {
     sdk.actions.ready().catch(() => {});
   }, []);
@@ -33,44 +34,55 @@ export default function Home() {
 
   return (
     <div className="arena-bg min-h-screen flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <div className="arena-title text-2xl">GLADAITORS</div>
-        <div className="flex items-center gap-3">
-          <WalletButton />
-          {/* Profile avatar â€” clickable, navigates to /profile */}
-          <button
-            onClick={() => router.push("/profile")}
-            className="flex items-center gap-2 rounded-full border border-gray-700 hover:border-amber-600 transition-colors px-2 py-1"
-            title="View profile"
-          >
-            {pfpUrl ? (
-              <Image
-                src={pfpUrl}
-                alt={username ?? "profile"}
-                width={28}
-                height={28}
-                className="rounded-full"
-                unoptimized
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 text-xs font-bold">
-                {username ? username[0].toUpperCase() : "?"}
-              </div>
-            )}
-            {username && (
-              <span className="text-xs text-gray-400 hidden sm:block">@{username}</span>
-            )}
-          </button>
-        </div>
-      </header>
+      <Navbar>
+        <WalletButton />
+        {/* Profile avatar — clickable, navigates to /profile */}
+        <button
+          onClick={() => router.push("/profile")}
+          className="flex items-center gap-2 rounded-full border transition-colors px-2 py-1"
+          style={{ borderColor: "#c4a882" }}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#b8860b")}
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#c4a882")}
+          title="View profile"
+        >
+          {pfpUrl ? (
+            <Image
+              src={pfpUrl}
+              alt={username ?? "profile"}
+              width={28}
+              height={28}
+              className="rounded-full"
+              unoptimized
+            />
+          ) : (
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{ background: "#d8ccb4", color: "#6b4c2a" }}
+            >
+              {username ? username[0].toUpperCase() : "?"}
+            </div>
+          )}
+          {username && (
+            <span className="text-xs hidden sm:block" style={{ color: "#6b4c2a" }}>
+              @{username}
+            </span>
+          )}
+        </button>
+      </Navbar>
 
       <main className="max-w-2xl mx-auto px-6 py-12">
         <div className="text-center mb-12">
           <h1 className="arena-title mb-3">GLADAITORS</h1>
-          <p className="text-gray-400 text-lg tracking-widest uppercase">
+          <p
+            className="text-lg tracking-widest uppercase font-bold"
+            style={{ color: "#6b4c2a" }}
+          >
             Configure. Bet. Dominate.
           </p>
-          <p className="text-gray-500 text-sm mt-2">
+          <p className="text-sm mt-2" style={{ color: "#8b6a40" }}>
+            Where ancient glory meets algorithmic fury.
+          </p>
+          <p className="text-sm mt-1" style={{ color: "#9e7a50" }}>
             Build your champion. Lock your bet. Watch them fight to the death.
           </p>
         </div>
@@ -82,18 +94,36 @@ export default function Home() {
             onClick={() => router.push("/create")}
             disabled={!isAuthed}
           >
-            + Create Match
+            + CREATE FIGHT
           </button>
           <button
             className="btn-secondary text-base py-3 px-8"
             onClick={() => router.push("/free-fight")}
             disabled={!isAuthed}
           >
-            FREE MATCH
+            FREE FIGHT
           </button>
         </div>
+
+        {/* Fight Aitor card */}
+        <div className="flex justify-center mb-4">
+          <button
+            className="btn-bot text-base py-3 px-8 w-full sm:w-auto"
+            onClick={() => router.push("/fight-aitor")}
+            disabled={!isAuthed}
+          >
+            ⚔️ FIGHT AITOR
+          </button>
+        </div>
+        <p className="text-center text-xs mb-6 tracking-wide" style={{ color: "#5a7a8a" }}>
+          Challenge the bot &bull; Free &bull; Earn points
+        </p>
+
         {!isAuthed && (
-          <p className="text-gray-500 text-xs text-center mb-4 animate-pulse">
+          <p
+            className="text-xs text-center mb-4 animate-pulse"
+            style={{ color: "#8b6a40" }}
+          >
             Connecting to Farcaster...
           </p>
         )}
@@ -101,7 +131,10 @@ export default function Home() {
         {/* Leaderboard link */}
         <div className="text-center mb-10">
           <button
-            className="text-xs text-amber-700 hover:text-amber-500 uppercase tracking-widest font-bold transition-colors"
+            className="text-xs font-bold uppercase tracking-widest transition-colors"
+            style={{ color: "#8b1a1a" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#b8860b")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#8b1a1a")}
             onClick={() => router.push("/leaderboard")}
           >
             Leaderboard &amp; Points &rarr;
@@ -109,14 +142,25 @@ export default function Home() {
         </div>
 
         <div>
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
-            Open Matches
+          <h2
+            className="text-sm font-bold uppercase tracking-widest mb-4 flex items-center gap-2"
+            style={{ color: "#6b4c2a" }}
+          >
+            <span
+              className="w-2 h-2 rounded-full animate-pulse inline-block"
+              style={{ background: "#8b1a1a" }}
+            />
+            Open Fights
           </h2>
 
           {!openIds || openIds.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-gray-800 rounded-lg">
-              <p className="text-gray-600">No open matches. Be the first to enter the pit.</p>
+            <div
+              className="text-center py-12 border border-dashed rounded-lg"
+              style={{ borderColor: "#c4a882" }}
+            >
+              <p style={{ color: "#9a7a50" }}>
+                No open fights. Be the first to enter the pit.
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -131,7 +175,6 @@ export default function Home() {
             </div>
           )}
         </div>
-
       </main>
       <Footer />
     </div>
@@ -165,20 +208,27 @@ function MatchRow({
       style={{ cursor: isOwn ? "default" : "pointer" }}
     >
       <div>
-        <div className="text-xs text-gray-500 mb-1">Match #{matchId.toString()}</div>
-        <div className="text-sm text-gray-300 font-mono">
+        <div className="text-xs mb-1" style={{ color: "#9a7a50" }}>
+          Fight #{matchId.toString()}
+        </div>
+        <div className="text-sm font-mono" style={{ color: "#3a2010" }}>
           {player1.slice(0, 8)}...{player1.slice(-4)}
         </div>
         {isOwn && (
-          <div className="text-xs text-amber-500 mt-0.5">Your match - waiting for opponent</div>
+          <div className="text-xs mt-0.5" style={{ color: "#b8860b" }}>
+            Your fight — waiting for opponent
+          </div>
         )}
       </div>
       <div className="text-right">
-        <div className="text-lg font-bold text-amber-400">
+        <div className="text-lg font-bold" style={{ color: "#b8860b" }}>
           {formatUnits(betAmount, 6)} USDC
         </div>
         {!isOwn && (
-          <div className="text-xs text-red-400 font-bold uppercase tracking-widest mt-0.5">
+          <div
+            className="text-xs font-bold uppercase tracking-widest mt-0.5"
+            style={{ color: "#8b1a1a" }}
+          >
             Challenge
           </div>
         )}
@@ -186,5 +236,3 @@ function MatchRow({
     </div>
   );
 }
-
-

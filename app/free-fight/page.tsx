@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import WalletButton from "@/components/WalletButton";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import StatAllocator from "@/components/StatAllocator";
 import CastGate from "@/components/CastGate";
@@ -10,12 +11,39 @@ import { GladiatorStats, TOTAL_POINTS } from "@/lib/contract";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
 
 const DEFAULT_STATS: GladiatorStats = {
-  strength: 4,
-  speed: 4,
-  defense: 4,
-  intel: 4,
-  luck: 4,
+  strength: 5,
+  speed: 5,
+  defense: 5,
+  intel: 5,
+  luck: 5,
 };
+
+const FIGHT_TYPE = "free";
+
+function lsKey(wallet: string) {
+  return `gladaitor_last_stats_${FIGHT_TYPE}_${wallet.toLowerCase()}`;
+}
+
+function loadSavedStats(wallet: string): GladiatorStats | null {
+  try {
+    const raw = localStorage.getItem(lsKey(wallet));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as GladiatorStats;
+    const keys: (keyof GladiatorStats)[] = ["strength", "speed", "defense", "intel", "luck"];
+    if (keys.every((k) => typeof parsed[k] === "number")) return parsed;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function saveStats(wallet: string, stats: GladiatorStats) {
+  try {
+    localStorage.setItem(lsKey(wallet), JSON.stringify(stats));
+  } catch {
+    // ignore
+  }
+}
 
 type Step = "cast_gate" | "configure" | "creating" | "done";
 
@@ -31,10 +59,20 @@ export default function FreeFightCreate() {
   const statsValid =
     Object.values(stats).reduce((a, b) => a + b, 0) === TOTAL_POINTS;
 
+  // Load last-used stats from localStorage when wallet is available
+  useEffect(() => {
+    if (!address) return;
+    const saved = loadSavedStats(address);
+    if (saved) setStats(saved);
+  }, [address]);
+
   async function handleCreate() {
     if (!address || !isAuthed || !statsValid) return;
     setStep("creating");
     setError(null);
+
+    // Persist this build so the allocator pre-fills next time
+    saveStats(address, stats);
 
     try {
       const res = await fetch("/api/free-match/create", {
@@ -89,12 +127,7 @@ export default function FreeFightCreate() {
 
     return (
       <div className="arena-bg min-h-screen flex flex-col">
-        <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <button onClick={() => router.push("/")} className="arena-title text-xl">
-            GLADAITORS
-          </button>
-          <WalletButton />
-        </header>
+        <Navbar><WalletButton /></Navbar>
         <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
           <div className="text-4xl font-bold text-amber-400 mb-2">FREE FIGHT CREATED</div>
           <p className="text-gray-400 text-sm mb-8">
@@ -134,12 +167,7 @@ export default function FreeFightCreate() {
 
   return (
     <div className="arena-bg min-h-screen flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <button onClick={() => router.push("/")} className="arena-title text-xl">
-          GLADAITORS
-        </button>
-        <WalletButton />
-      </header>
+      <Navbar><WalletButton /></Navbar>
 
       <main className="flex-1 max-w-lg mx-auto w-full px-6 py-10">
         <div className="flex items-center gap-3 mb-2">
@@ -163,6 +191,7 @@ export default function FreeFightCreate() {
             stats={stats}
             onChange={setStats}
             disabled={step === "creating"}
+            onReset={() => setStats(DEFAULT_STATS)}
           />
         </div>
 

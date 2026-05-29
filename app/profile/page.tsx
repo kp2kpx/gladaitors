@@ -8,6 +8,7 @@ import { baseSepolia } from "viem/chains";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
 import { PIT_ARENA_ABI, PIT_ARENA_ADDRESS, ERC20_ABI, USDC_ADDRESS } from "@/lib/contract";
 import type { FreeMatch } from "@/lib/kv";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 // --------------------------------------------------------------------------
@@ -353,18 +354,14 @@ export default function ProfilePage() {
 
   return (
     <div className="arena-bg min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <button onClick={() => router.push("/")} className="arena-title text-xl">
-          GLADAITORS
-        </button>
+      <Navbar>
         <button
           onClick={() => router.push("/")}
           className="text-xs text-gray-500 hover:text-gray-300 uppercase tracking-widest transition-colors"
         >
           &larr; Back
         </button>
-      </header>
+      </Navbar>
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-8">
 
