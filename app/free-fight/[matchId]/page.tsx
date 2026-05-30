@@ -6,7 +6,6 @@ import WalletButton from "@/components/WalletButton";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import StatAllocator from "@/components/StatAllocator";
-import CastGate from "@/components/CastGate";
 import FightReplay from "@/components/FightReplay";
 import FightSummary from "@/components/FightSummary";
 import { simulateFight, FightResult } from "@/lib/fight-engine";
@@ -25,7 +24,6 @@ const DEFAULT_STATS: GladiatorStats = {
 
 type ViewState =
   | "loading"
-  | "cast_gate"
   | "configure"
   | "joining"
   | "waiting_p2"
@@ -85,7 +83,7 @@ export default function FreeFightRoom({
           if (m.state === "ready") runFight(m);
           else setView("result");
         } else if (!m.player2) {
-          setView("cast_gate");
+          setView("configure");
         } else {
           if (m.state === "ready") runFight(m);
           else setView("result");
@@ -152,10 +150,6 @@ export default function FreeFightRoom({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wallet: loser, action: "free_fight_completed", matchId }),
     }).catch(() => {});
-  }
-
-  async function handleCastVerified() {
-    setView("configure");
   }
 
   async function handleJoin() {
@@ -227,10 +221,6 @@ export default function FreeFightRoom({
         </button>
       </div>
     );
-  }
-
-  if (view === "cast_gate") {
-    return <CastGate fid={fid} onVerified={handleCastVerified} />;
   }
 
   if (view === "configure") {

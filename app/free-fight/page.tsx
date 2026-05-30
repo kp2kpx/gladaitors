@@ -6,7 +6,6 @@ import WalletButton from "@/components/WalletButton";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import StatAllocator from "@/components/StatAllocator";
-import CastGate from "@/components/CastGate";
 import { GladiatorStats, TOTAL_POINTS } from "@/lib/contract";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
 
@@ -45,13 +44,13 @@ function saveStats(wallet: string, stats: GladiatorStats) {
   }
 }
 
-type Step = "cast_gate" | "configure" | "creating" | "done";
+type Step = "configure" | "creating" | "done";
 
 export default function FreeFightCreate() {
   const router = useRouter();
   const { address, fid, isAuthed } = useFarcasterAuth();
 
-  const [step, setStep] = useState<Step>("cast_gate");
+  const [step, setStep] = useState<Step>("configure");
   const [stats, setStats] = useState<GladiatorStats>(DEFAULT_STATS);
   const [createdMatchId, setCreatedMatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,15 +107,6 @@ export default function FreeFightCreate() {
       setError(String(e));
       setStep("configure");
     }
-  }
-
-  if (step === "cast_gate") {
-    return (
-      <CastGate
-        fid={fid}
-        onVerified={() => setStep("configure")}
-      />
-    );
   }
 
   if (step === "done" && createdMatchId) {
