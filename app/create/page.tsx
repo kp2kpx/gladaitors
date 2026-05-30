@@ -176,7 +176,7 @@ export default function CreateMatch() {
           <div className="text-4xl font-bold text-amber-400 mb-6">#{createdMatchId}</div>
           <p className="text-gray-500 text-sm mb-8">
             Share this ID with your opponent. They join from the home screen.
-            Once they join, both of you submit gladiator stats and the fight begins.
+            Once they join, both of you submit gladaitor stats and the fight begins.
           </p>
           <div className="space-y-3">
             <button
@@ -207,7 +207,7 @@ export default function CreateMatch() {
           Enter the Pit
         </h1>
         <p className="text-gray-500 text-sm mb-8">
-          Set your bet and build your gladiator. Your opponent must meet the bet.
+          Set your bet and build your gladaitor. Your opponent must meet the bet.
         </p>
 
         {/* Bet amount */}
@@ -233,7 +233,7 @@ export default function CreateMatch() {
         {/* Stat allocation */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-6">
           <label className="block text-xs text-gray-400 uppercase tracking-widest mb-4">
-            Gladiator Stats
+            Gladaitor Stats
           </label>
           <StatAllocator
             stats={stats}

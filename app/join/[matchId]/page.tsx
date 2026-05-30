@@ -137,7 +137,7 @@ export default function JoinMatch({ params }: { params: Promise<{ matchId: strin
         <main className="max-w-lg mx-auto px-6 py-16 text-center">
           <div className="text-4xl font-bold text-amber-400 mb-4">CHALLENGE ACCEPTED</div>
           <p className="text-gray-400 mb-8">
-            Your gladiator has entered the arena. Both fighters are ready.
+            Your gladaitor has entered the arena. Both fighters are ready.
             The fight will resolve on-chain.
           </p>
           <div className="space-y-3">
@@ -191,7 +191,7 @@ export default function JoinMatch({ params }: { params: Promise<{ matchId: strin
   function getStatusText() {
     if (step === "approving" && (approveIsPending || approveConfirming)) return "Approving USDC...";
     if (step === "joining" && (joinIsPending || joinConfirming)) return "Joining fight on-chain...";
-    if (step === "submitting" && (submitIsPending || submitConfirming)) return "Submitting gladiator...";
+    if (step === "submitting" && (submitIsPending || submitConfirming)) return "Submitting gladaitor...";
     return "Processing...";
   }
 
@@ -221,7 +221,7 @@ export default function JoinMatch({ params }: { params: Promise<{ matchId: strin
         {/* Stat allocation */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-6">
           <label className="block text-xs text-gray-400 uppercase tracking-widest mb-4">
-            Build Your Gladiator
+            Build Your Gladaitor
           </label>
           <StatAllocator stats={stats} onChange={setStats} disabled={isBusy} />
         </div>

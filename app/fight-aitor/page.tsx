@@ -193,7 +193,7 @@ export default function FightAitor() {
           {/* Player stat allocator */}
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-5">
             <label className="block text-xs text-gray-400 uppercase tracking-widest mb-4">
-              Build Your Gladiator
+              Build Your Gladaitor
             </label>
             <StatAllocator
               stats={playerStats}

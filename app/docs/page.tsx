@@ -40,7 +40,7 @@ export default function Docs() {
             GLADAITOR — Official Docs
           </h1>
           <p className="text-xs uppercase tracking-widest" style={{ color: inkMuted }}>
-            Version: 0.1 — Base Sepolia Testnet &nbsp;|&nbsp; Last updated: 2026-05-28
+            Version: 0.1 — Base Sepolia Testnet &nbsp;|&nbsp; Last updated: 2026-05-29
           </p>
         </div>
 
@@ -50,9 +50,19 @@ export default function Docs() {
           <section>
             <h2 className="docs-heading">What is GLADAITOR?</h2>
             <p style={{ color: ink }}>
-              GLADAITOR is a Farcaster Mini App where you configure an AI gladiator agent and bet
-              against another player. Your gladiators fight autonomously. Winner takes 90% of the
-              pot. House takes 10%. No skills required — only strategy.
+              GLADAITOR is a Farcaster Mini App where you configure a cyber-gladaitor chibi and pit
+              it against another player. Your gladaitors fight autonomously until one reaches 0 HP.
+              Winner takes 90% of the pot. House takes 10%. No luck required — only build strategy.
+            </p>
+          </section>
+
+          {/* Fighters */}
+          <section>
+            <h2 className="docs-heading">Red vs Blue</h2>
+            <p style={{ color: ink }}>
+              Every fight is Red corner vs Blue corner. The player who creates the fight plays as
+              Red. The player who joins plays as Blue. Both fighters are cyber-gladaitor chibis —
+              same base design, different color scheme. Stats are what separate them.
             </p>
           </section>
 
@@ -61,27 +71,36 @@ export default function Docs() {
             <h2 className="docs-heading">Fight Types</h2>
             <div className="space-y-4">
               <div className="rounded-lg p-4" style={{ background: panel, border: `1px solid ${border}` }}>
-                <p className="font-bold uppercase tracking-widest text-xs mb-2" style={{ color: crimson }}>FIGHTS</p>
+                <p className="font-bold uppercase tracking-widest text-xs mb-2" style={{ color: crimson }}>CREATE FIGHT</p>
                 <p style={{ color: ink }}>
-                  On-chain fights with real USDC bets on Base. Both players lock the same amount.
-                  Winner takes 90%, house takes 10%. All results recorded on-chain permanently.
+                  On-chain fight with a real USDC wager on Base. You set the bet amount, lock your
+                  stats, and share a join link. Opponent matches the bet and submits their build.
+                  Winner takes 90%, house takes 10%. Results recorded on-chain permanently.
+                  Winnings are claimable from your profile page — gasless, sponsored by the house.
                 </p>
               </div>
               <div className="rounded-lg p-4" style={{ background: panel, border: `1px solid ${border}` }}>
-                <p className="font-bold uppercase tracking-widest text-xs mb-2" style={{ color: crimson }}>FREE FIGHTS</p>
+                <p className="font-bold uppercase tracking-widest text-xs mb-2" style={{ color: crimson }}>FREE FIGHT</p>
                 <p style={{ color: ink }}>
-                  Off-chain fights with no money at stake. Cast to play — sharing a free fight on
-                  Farcaster is your entry ticket. Results are tracked for points.
+                  Off-chain fight with no money at stake. Cast to play — sharing a free fight on
+                  Farcaster is your entry ticket. Results are tracked for points and the leaderboard.
+                </p>
+              </div>
+              <div className="rounded-lg p-4" style={{ background: panel, border: `1px solid ${border}` }}>
+                <p className="font-bold uppercase tracking-widest text-xs mb-2" style={{ color: crimson }}>FIGHT AITOR</p>
+                <p style={{ color: ink }}>
+                  Challenge the house AI — Aitor. Aitor runs a fixed stat build. A good warm-up
+                  before risking real USDC. Results tracked for points.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* The Gladiator */}
+          {/* The Gladaitor */}
           <section>
-            <h2 className="docs-heading">The Gladiator</h2>
+            <h2 className="docs-heading">The Gladaitor</h2>
             <p className="mb-4" style={{ color: ink }}>
-              Each gladiator is configured with{" "}
+              Each gladaitor is configured with{" "}
               <span className="font-bold" style={{ color: gold }}>25 stat points</span>{" "}
               distributed across 5 attributes. Each attribute must be between 1 and 10.
             </p>
@@ -122,13 +141,12 @@ export default function Docs() {
             <h2 className="docs-heading">How Fights Work</h2>
             <ol className="space-y-2.5 list-none">
               {[
-                "Both gladiators start with 100 HP",
-                "Each fight runs for up to 10 rounds",
-                "Each round: higher Speed attacks first. Speed gap ≥ 3 = double attack.",
+                "Both gladaitors start with 100 HP",
+                "Fights run until one gladaitor reaches 0 HP — no round cap, fight to the death",
+                "Each round: higher Speed attacks first. Speed gap ≥ 3 = double attack (strike before AND after opponent).",
                 <>Damage formula: <code style={{ background: codeBg, color: "#fbbf24", padding: "1px 6px", borderRadius: "3px", fontSize: "0.75rem" }}>max(1, STR - max(0, DEF - INT))</code> — Intel pierces Defense directly</>,
                 "Crit chance = floor(LCK / 2) × 10%. Crit = 2× damage after defense.",
-                "First gladiator to reach 0 HP loses",
-                "If both survive 10 rounds: higher remaining HP wins. If tied: higher total stats wins.",
+                "First gladaitor to reach 0 HP loses. If both drop simultaneously: higher remaining HP (less overkill) wins.",
               ].map((item, i) => (
                 <li key={i} className="flex gap-3">
                   <span className="font-bold tabular-nums w-5 shrink-0" style={{ color: gold }}>{i + 1}.</span>
@@ -197,7 +215,7 @@ export default function Docs() {
                 "Both players must bet the same amount",
                 "House cut: 10% of total pot",
                 "Once a fight is created, the bet is locked in the contract",
-                "Fights auto-resolve once both gladiators are submitted",
+                "Fights auto-resolve once both gladaitors are submitted",
               ].map((rule) => (
                 <li key={rule} className="flex gap-2">
                   <span className="shrink-0 font-bold" style={{ color: crimson }}>—</span>
@@ -230,7 +248,7 @@ export default function Docs() {
             <div className="rounded-lg p-4" style={{ background: codeBg, border: `1px solid #3d2b15` }}>
               <p className="text-xs uppercase tracking-widest mb-1" style={{ color: inkMuted }}>Contract (Base Sepolia)</p>
               <code className="text-xs font-mono break-all" style={{ color: "#fbbf24" }}>
-                0x2bfC4886D256aA8Ff4ca813f59B09f364092d9aA
+                0x7581a548C0D1E2162Ba18D504A34dd0f2309e2b9
               </code>
             </div>
           </section>

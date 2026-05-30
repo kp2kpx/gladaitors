@@ -1,10 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import type { FightResult, RoundLog } from "@/lib/fight-engine";
 import { useFightAudio } from "@/lib/useAudio";
 
-// ─── Gladiator character SVG designs ──────────────────────────────────────
+// ─── Sprite-based character avatar ──────────────────────────────────────────
+// Uses 4 transparent PNGs per color variant (red/blue).
+// Pose swaps are driven by the fight engine's round data.
+// Idle: subtle breathing scaleY loop
+// Attack: swap to attack.png + translateX lunge
+// Hit: swap to hit.png + knockback + impact glow
+// Death: swap to death.png + drop + fade
+
+type Pose = "idle" | "attack" | "hit" | "death";
+type CharColor = "red" | "blue";
+
+// Legacy SVG character designs — kept for fallback/variant display elsewhere
 // 10 unique stylized vector characters, 80×96 viewBox.
 // All characters face RIGHT by default. P2 gets scaleX(-1) via CSS.
 
@@ -315,6 +327,157 @@ function CharacterVariant({ variant }: { variant: number }) {
   return <>{chars[variant % 10]}</>;
 }
 
+// ─── SpriteAvatar: image-based gladiator with pose-swap animations ───────────
+
+function SpriteAvatar({
+  type,
+  color,
+  pose,
+  dim,
+  shake,
+  flash,
+  critGlow,
+  attackLunge,
+  hitKnockback,
+}: {
+  type: "p1" | "p2";
+  color: CharColor;
+  pose: Pose;
+  dim?: boolean;
+  shake?: boolean;
+  flash?: boolean;
+  critGlow?: boolean;
+  // Lunge offset in px: positive = toward opponent (P1 lunges right, P2 lunges left)
+  attackLunge?: number;
+  hitKnockback?: number;
+}) {
+  const isP2 = type === "p2";
+
+  // The character images are 848×1216. We display them at a fixed height
+  // and let width scale proportionally. Height ~110px for arena floor fit.
+  const H = 110;
+
+  const src = `/characters/${color}/${pose}.png`;
+
+  // Build transform: mirror P2, add lunge/knockback offset
+  const lungeOffset = attackLunge ?? 0;
+  const knockOffset = hitKnockback ?? 0;
+  const translateX = isP2
+    ? -(lungeOffset + knockOffset)
+    : (lungeOffset + knockOffset);
+
+  let transform = `scaleX(${isP2 ? -1 : 1})`;
+  if (translateX !== 0) {
+    // Apply translateX BEFORE scaleX so direction is correct
+    transform = `translateX(${isP2 ? -translateX : translateX}px) scaleX(${isP2 ? -1 : 1})`;
+  }
+
+  // Idle: subtle breathing animation via CSS class
+  // Attack: brightness pulse on sword arm (handled via filter)
+  // Death: sword glow fades — handled via filter brightness
+
+  const idleAnim: React.CSSProperties =
+    pose === "idle"
+      ? { animation: "gladBreath 1.5s ease-in-out infinite" }
+      : {};
+
+  const deathAnim: React.CSSProperties =
+    pose === "death"
+      ? { animation: "gladDeath 600ms ease-out forwards" }
+      : {};
+
+  const shakeStyle: React.CSSProperties = shake
+    ? { animation: "gladShake 150ms ease-in-out" }
+    : {};
+
+  const critGlowStyle: React.CSSProperties = critGlow
+    ? { animation: "gladCritGlow 200ms ease-out" }
+    : {};
+
+  // Pick dominant animation (priority: shake > critGlow > death > idle)
+  const animStyle = shake ? shakeStyle : critGlow ? critGlowStyle : pose === "death" ? deathAnim : idleAnim;
+
+  // Filter: flash (hit flash), attack brightness on attack pose
+  let filterVal: string | undefined;
+  if (flash) {
+    filterVal = "brightness(3) saturate(0.2) sepia(1) hue-rotate(-10deg)";
+  } else if (pose === "attack") {
+    // Sword arm brightness pulse — drawn on top of the image itself
+    filterVal = "brightness(1.35) drop-shadow(0 0 8px rgba(100,200,255,0.7))";
+  } else if (pose === "death") {
+    filterVal = "brightness(0.7)";
+  }
+
+  // Impact glow: radial glow at sword arm when taking a hit
+  const showImpactGlow = pose === "hit" && flash;
+
+  return (
+    <div
+      style={{
+        display: "inline-block",
+        position: "relative",
+        // Center-align for the arena floor
+        verticalAlign: "bottom",
+        opacity: (!pose.startsWith("death") && dim) ? 0.35 : 1,
+        filter: filterVal,
+        transition: flash ? "filter 0ms" : "filter 200ms ease-out",
+        transform,
+        transformOrigin: "bottom center",
+        ...animStyle,
+      }}
+    >
+      <Image
+        src={src}
+        alt={`${color} gladaitor ${pose}`}
+        width={Math.round(H * (848 / 1216))}
+        height={H}
+        style={{
+          display: "block",
+          // Idle breathing: very subtle rotate sway (in CSS keyframe)
+          imageRendering: "auto",
+        }}
+        priority
+        unoptimized
+      />
+      {/* Impact glow ring on hit */}
+      {showImpactGlow && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "50%",
+            background: "radial-gradient(circle at center, rgba(255,100,100,0.35) 0%, transparent 70%)",
+            pointerEvents: "none",
+            animation: "gladImpactGlow 300ms ease-out forwards",
+          }}
+        />
+      )}
+      {critGlow && (
+        <div
+          style={{
+            position: "absolute",
+            top: "-22px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            whiteSpace: "nowrap",
+            fontSize: "10px",
+            fontWeight: 900,
+            color: "#fbbf24",
+            textShadow: "0 0 8px rgba(251,191,36,0.9)",
+            letterSpacing: "0.05em",
+            pointerEvents: "none",
+            animation: "gladCritLabel 200ms ease-out forwards",
+          }}
+        >
+          CRITICAL!
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Legacy SVG GladiatorAvatar — kept for any code that still calls it ──────
+// (Currently unused in FightReplay but other components may reference it)
 function GladiatorAvatar({
   type,
   variant = 0,
@@ -792,6 +955,17 @@ export default function FightReplay({
   const [announceColor, setAnnounceColor] = useState<"gold" | "red">("gold");
   const [announceVisible, setAnnounceVisible] = useState(false);
 
+  // ── Sprite pose state ─────────────────────────────────────────────────────
+  // Tracks which image frame each character should show.
+  const [poseP1, setPoseP1] = useState<Pose>("idle");
+  const [poseP2, setPoseP2] = useState<Pose>("idle");
+  // Attack lunge offset (px toward opponent). Positive = toward opponent.
+  const [lungeP1, setLungeP1] = useState(0);
+  const [lungeP2, setLungeP2] = useState(0);
+  // Knockback offset (px away from opponent). Positive = away.
+  const [knockP1, setKnockP1] = useState(0);
+  const [knockP2, setKnockP2] = useState(0);
+
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   function clearAll() {
@@ -803,6 +977,54 @@ export default function FightReplay({
     const id = setTimeout(fn, delay);
     timeoutsRef.current.push(id);
     return id;
+  }
+
+  // ── Pose animation helpers ────────────────────────────────────────────────
+  // Called when attacker fires their attack.
+  // Attacker: idle → attack (lunge 25px) → idle (after 400ms or crit flight)
+  // Defender: idle → hit (knockback 10px) → idle (after 400ms hold)
+  // Death: stays in death pose permanently.
+  function triggerPoseAttack(attacker: "p1" | "p2", flightMs: number, hp1Next: number, hp2Next: number) {
+    const setAttackPose = attacker === "p1" ? setPoseP1 : setPoseP2;
+    const setAttackLunge = attacker === "p1" ? setLungeP1 : setLungeP2;
+    const setDefendPose = attacker === "p1" ? setPoseP2 : setPoseP1;
+    const setDefendKnock = attacker === "p1" ? setKnockP2 : setKnockP1;
+
+    const defenderDiesFromHit = attacker === "p1" ? hp2Next <= 0 : hp1Next <= 0;
+    const attackerDiesFromHit = attacker === "p1" ? hp1Next <= 0 : hp2Next <= 0;
+
+    // Attacker lunges forward
+    setAttackPose("attack");
+    setAttackLunge(25);
+
+    const defenderDelay = flightMs; // when projectile lands
+
+    // Defender hit pose when projectile arrives
+    schedule(() => {
+      if (defenderDiesFromHit) {
+        setDefendPose("death");
+      } else {
+        setDefendPose("hit");
+        setDefendKnock(10);
+        // Hold hit pose for 400ms, then return to idle
+        schedule(() => {
+          setDefendPose("idle");
+          setDefendKnock(0);
+        }, 400);
+      }
+    }, defenderDelay);
+
+    // Attacker returns to idle after lunge (slightly after projectile launches)
+    const attackerReturnDelay = Math.min(flightMs * 0.6, 300);
+    schedule(() => {
+      // Only return to idle if attacker isn't also dying (simultaneous death edge case)
+      if (!attackerDiesFromHit) {
+        setAttackPose("idle");
+      } else {
+        setAttackPose("death");
+      }
+      setAttackLunge(0);
+    }, attackerReturnDelay);
   }
 
   // Show floating damage above the DEFENDER's HP bar.
@@ -837,6 +1059,8 @@ export default function FightReplay({
       schedule(() => {
         const projId = ++projectileIdRef.current;
         setProjectile({ id: projId, attacker, isCrit });
+        // Pose: attacker goes to attack frame at same time as projectile launch
+        triggerPoseAttack(attacker, flightMs, hp1Next, hp2Next);
         // Clear projectile after it lands
         schedule(() => setProjectile(null), flightMs + 100);
       }, 200);
@@ -844,6 +1068,8 @@ export default function FightReplay({
       // Normal hit: projectile fires immediately
       const projId = ++projectileIdRef.current;
       setProjectile({ id: projId, attacker, isCrit });
+      // Pose: attacker goes to attack frame immediately
+      triggerPoseAttack(attacker, flightMs, hp1Next, hp2Next);
       schedule(() => setProjectile(null), flightMs + 100);
     }
 
@@ -950,8 +1176,6 @@ export default function FightReplay({
       schedule(() => {
         setCurrentRound(ri + 1);
         setPhase({ type: "round_announce", round: ri + 1, firstMover: firstMoverName });
-        // Subtle bell on each round start
-        audio?.playSfx("round_start");
       }, t);
       t += 500; // show round header for 500ms before first attack announce
 
@@ -1047,6 +1271,14 @@ export default function FightReplay({
     setFlashP2(false);
     setCritGlowP1(false);
     setCritGlowP2(false);
+    // Set death pose on loser
+    if (result.winner === "p1") {
+      setPoseP2("death");
+    } else {
+      setPoseP1("death");
+    }
+    setLungeP1(0); setLungeP2(0);
+    setKnockP1(0); setKnockP2(0);
   }
 
   const p1Won = result.winner === "p1";
@@ -1075,7 +1307,7 @@ export default function FightReplay({
 
   return (
     <div className="relative w-full max-w-sm mx-auto select-none">
-      {/* Shake + crit glow keyframes injected once */}
+      {/* Animation keyframes — injected once */}
       <style>{`
         @keyframes gladShake {
           0%   { transform: translateX(0); }
@@ -1133,6 +1365,21 @@ export default function FightReplay({
           0%   { opacity: 0; transform: scale(0.96); }
           100% { opacity: 1; transform: scale(1); }
         }
+        /* Sprite-based character animations */
+        @keyframes gladBreath {
+          0%, 100% { transform: scaleY(1) rotate(0deg); }
+          25%       { transform: scaleY(1.02) rotate(0.3deg); }
+          75%       { transform: scaleY(0.99) rotate(-0.3deg); }
+        }
+        @keyframes gladDeath {
+          0%   { opacity: 1; transform: translateY(0px); filter: brightness(1); }
+          30%  { opacity: 0.85; transform: translateY(8px); filter: brightness(0.8); }
+          100% { opacity: 0.6; transform: translateY(20px); filter: brightness(0.3); }
+        }
+        @keyframes gladImpactGlow {
+          0%   { opacity: 1; }
+          100% { opacity: 0; }
+        }
       `}</style>
 
       {/* Skip button */}
@@ -1178,16 +1425,22 @@ export default function FightReplay({
         </div>
       </div>
 
-      {/* Avatars — flash on defender (white hit flash), critGlow on attacker (gold burst) */}
+      {/* Sprite characters — positioned on arena floor */}
       {/* position:relative so the flying projectile can be absolutely positioned within */}
-      <div className="flex justify-between items-end px-4 mb-4 h-28" style={{ position: "relative" }}>
-        <GladiatorAvatar
+      <div
+        className="flex justify-between items-end px-2 mb-4"
+        style={{ position: "relative", height: "130px" }}
+      >
+        <SpriteAvatar
           type="p1"
+          color="red"
+          pose={poseP1}
           dim={p1Fell}
-          fallen={p1Fell}
           shake={shakeP1}
           flash={flashP1}
           critGlow={critGlowP1}
+          attackLunge={lungeP1}
+          hitKnockback={knockP1}
         />
         {/* Flying projectile — re-mounts on each new hit via key prop */}
         {projectile && (
@@ -1197,13 +1450,16 @@ export default function FightReplay({
             isCrit={projectile.isCrit}
           />
         )}
-        <GladiatorAvatar
+        <SpriteAvatar
           type="p2"
+          color="blue"
+          pose={poseP2}
           dim={p2Fell}
-          fallen={p2Fell}
           shake={shakeP2}
           flash={flashP2}
           critGlow={critGlowP2}
+          attackLunge={lungeP2}
+          hitKnockback={knockP2}
         />
       </div>
 

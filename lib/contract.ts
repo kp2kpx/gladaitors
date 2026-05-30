@@ -1,12 +1,13 @@
 // PitArena contract config — deployed on Base Sepolia
-// v4: house cut auto-swapped USDC→ETH via Uniswap V3 (SwapRouter02, USDC/WETH 0.05% pool)
-//     ReentrancyGuard on resolve/claim. Swap fallback: on failure USDC credited to
-//     pendingWithdrawals[houseWallet] + HouseSwapFailed event emitted.
+// v5: USDC_PER_ETH_FLOOR changed from hardcoded constant (3675, ~$3,500 ETH) to
+//     mutable usdcPerEthFloor defaulting to 1800 (~$2,000 ETH with 10% buffer).
+//     Added setEthFloor(uint256) owner-only function — no redeploy needed when
+//     ETH price moves significantly. Also adds EthFloorUpdated event.
 //     NOTE: SwapRouter02 address differs between Sepolia (0x94cC0AA...) and mainnet (0x2626664c...).
 //           The deployed contract uses the Sepolia address. Update before mainnet deploy.
 // Deployed 2026-05-29 — owner: 0xeC37F40D691E895a8e9f23343D1f17979A3f988c (cold)
 //                      houseWallet: 0x27811E4b87507424b6f682b4dCAF1fd9759b2AE6 (Vercel)
-export const PIT_ARENA_ADDRESS = "0x47BCEc4b1c00e6C87A5A4CDAda86E0Ec1bc6461C" as const;
+export const PIT_ARENA_ADDRESS = "0x7581a548C0D1E2162Ba18D504A34dd0f2309e2b9" as const;
 
 export const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const;
 
@@ -45,6 +46,22 @@ export const PIT_ARENA_ABI = [
     name: "transferOwnership",
     outputs: [],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    // Update slippage floor — call when ETH price moves significantly
+    // Rule of thumb: ~10% below current ETH spot price (e.g. ETH@$2,000 → floor=1800)
+    inputs: [{ internalType: "uint256", name: "_newFloor", type: "uint256" }],
+    name: "setEthFloor",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "usdcPerEthFloor",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
     type: "function",
   },
   // Read

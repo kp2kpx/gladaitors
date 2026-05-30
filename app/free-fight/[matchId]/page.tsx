@@ -185,7 +185,7 @@ export default function FreeFightRoom({
     const winner = fightResult.winner === "p1" ? match.player1 : match.player2;
     const myWinner = address?.toLowerCase() === winner?.toLowerCase();
     const shareText = encodeURIComponent(
-      `My gladiator just ${myWinner ? "WON" : "fought hard"} in GLADAITOR (FREE FIGHT) ⚔️ — gladaitors.vercel.app`
+      `My gladaitor just ${myWinner ? "WON" : "fought hard"} in GLADAITOR (FREE FIGHT) ⚔️ — gladaitors.vercel.app`
     );
     window.open(
       `https://warpcast.com/~/compose?text=${shareText}`,
@@ -234,10 +234,10 @@ export default function FreeFightRoom({
             </span>
           </div>
           <h1 className="text-2xl font-bold text-white uppercase tracking-widest mb-2">
-            Build Your Gladiator
+            Build Your Gladaitor
           </h1>
           <p className="text-gray-500 text-sm mb-6">
-            You are joining fight {matchId.slice(0, 8)}... — configure your gladiator and enter the pit.
+            You are joining fight {matchId.slice(0, 8)}... — configure your gladaitor and enter the pit.
           </p>
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-5">
             <StatAllocator stats={stats} onChange={setStats} disabled={false} />
@@ -275,7 +275,7 @@ export default function FreeFightRoom({
         : "https://gladaitors.vercel.app";
     const fightUrl = `${origin}/free-fight/${matchId}`;
     const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(
-      "Come fight me in GLADAITOR! ⚔️ Configure your gladiator and challenge me (FREE)"
+      "Come fight me in GLADAITOR! ⚔️ Configure your gladaitor and challenge me (FREE)"
     )}&embeds[]=${encodeURIComponent(fightUrl)}`;
 
     return (

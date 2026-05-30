@@ -110,7 +110,7 @@ export default function FreeFightCreate() {
         : "https://gladaitors.vercel.app";
     const fightUrl = `${origin}/free-fight/${createdMatchId}`;
     const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(
-      "Come fight me in GLADAITOR! ⚔️ Configure your gladiator and challenge me (FREE)"
+      "Come fight me in GLADAITOR! ⚔️ Configure your gladaitor and challenge me (FREE)"
     )}&embeds[]=${encodeURIComponent(fightUrl)}`;
 
     return (
@@ -184,7 +184,7 @@ export default function FreeFightCreate() {
           </h1>
         </div>
         <p className="text-sm mb-8" style={{ color: "#8b6a40" }}>
-          No USDC required. Build your gladiator and challenge anyone. Fight resolves instantly, off-chain.
+          No USDC required. Build your gladaitor and challenge anyone. Fight resolves instantly, off-chain.
         </p>
 
         {/* Public / Private toggle */}
@@ -221,7 +221,7 @@ export default function FreeFightCreate() {
           style={{ background: "#e8dcc8", border: "1px solid #c4a882" }}
         >
           <label className="block text-xs uppercase tracking-widest mb-4" style={{ color: "#6b4c2a" }}>
-            Build Your Gladiator
+            Build Your Gladaitor
           </label>
           <StatAllocator
             stats={stats}

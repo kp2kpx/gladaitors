@@ -37,7 +37,6 @@ export interface FightResult {
 }
 
 const STARTING_HP = 100;
-const NUM_ROUNDS = 10;
 
 // Simple deterministic hash-like mixer using xorshift — good enough for client-side sim
 function nextSeed(seed: number): number {
@@ -87,18 +86,17 @@ export function simulateFight(
 
   const speedGap = Math.abs(g1.speed - g2.speed);
   const g1Faster = g1.speed > g2.speed;
-  const g2Faster = g2.speed > g1.speed;
   const tied = g1.speed === g2.speed;
   const doubleAttack = speedGap >= 3;
 
-  for (let round = 0; round < NUM_ROUNDS; round++) {
-    if (hp1 <= 0 || hp2 <= 0) {
-      rounds = round;
-      break;
-    }
+  let round = 0;
+  // Fight runs until one (or both) gladiators reach 0 HP — no turn cap.
+  while (hp1 > 0 && hp2 > 0) {
+    round++;
 
     if (tied) {
-      // Simultaneous — both take damage
+      // Simultaneous — both take damage this exchange.
+      // Track raw HP after damage (before clamping) for tiebreak.
       const r1 = calcDamage(g1, g2, seed);
       seed = r1.nextSeedVal;
       const r2 = calcDamage(g2, g1, seed);
@@ -113,7 +111,7 @@ export function simulateFight(
       if (r2.isCrit) critsP2++;
 
       log.push({
-        round: round + 1,
+        round,
         attacker: "p1",
         damage: r1.damage,
         isCrit: r1.isCrit,
@@ -124,7 +122,7 @@ export function simulateFight(
         speedGap,
       });
       log.push({
-        round: round + 1,
+        round,
         attacker: "p2",
         damage: r2.damage,
         isCrit: r2.isCrit,
@@ -143,7 +141,7 @@ export function simulateFight(
       if (r1.isCrit) critsP1++;
 
       log.push({
-        round: round + 1,
+        round,
         attacker: "p1",
         damage: r1.damage,
         isCrit: r1.isCrit,
@@ -163,7 +161,7 @@ export function simulateFight(
         if (r2.isCrit) critsP2++;
 
         log.push({
-          round: round + 1,
+          round,
           attacker: "p2",
           damage: r2.damage,
           isCrit: r2.isCrit,
@@ -183,7 +181,7 @@ export function simulateFight(
           if (r3.isCrit) critsP1++;
 
           log.push({
-            round: round + 1,
+            round,
             attacker: "p1",
             damage: r3.damage,
             isCrit: r3.isCrit,
@@ -196,7 +194,7 @@ export function simulateFight(
         }
       }
     } else {
-      // g2 is faster
+      // g2 is faster (g2Faster is true — covered by while condition eliminating tied)
       const r1 = calcDamage(g2, g1, seed);
       seed = r1.nextSeedVal;
       hp1 -= r1.damage;
@@ -204,7 +202,7 @@ export function simulateFight(
       if (r1.isCrit) critsP2++;
 
       log.push({
-        round: round + 1,
+        round,
         attacker: "p2",
         damage: r1.damage,
         isCrit: r1.isCrit,
@@ -224,7 +222,7 @@ export function simulateFight(
         if (r2.isCrit) critsP1++;
 
         log.push({
-          round: round + 1,
+          round,
           attacker: "p1",
           damage: r2.damage,
           isCrit: r2.isCrit,
@@ -244,7 +242,7 @@ export function simulateFight(
           if (r3.isCrit) critsP2++;
 
           log.push({
-            round: round + 1,
+            round,
             attacker: "p2",
             damage: r3.damage,
             isCrit: r3.isCrit,
@@ -257,28 +255,24 @@ export function simulateFight(
         }
       }
     }
-
-    rounds = round + 1;
   }
 
-  // Determine winner
-  const totalStats1 = g1.strength + g1.speed + g1.defense + g1.intel + g1.luck;
-  const totalStats2 = g2.strength + g2.speed + g2.defense + g2.intel + g2.luck;
+  rounds = round;
 
+  // Determine winner.
+  // Both can reach 0 on the same exchange (simultaneous speed-tied hits).
+  // Tiebreak: lower raw HP (more negative) loses. Exact tie → p1 (attacker/initiator) loses.
   let winner: "p1" | "p2";
 
   if (hp1 <= 0 && hp2 <= 0) {
-    winner = totalStats1 >= totalStats2 ? "p1" : "p2";
+    // Both dead this exchange — whoever has lower HP (more overkill) is the loser.
+    // If exactly equal, p1 loses (consistent tiebreak: initiator loses the draw).
+    winner = hp2 < hp1 ? "p1" : "p2";
   } else if (hp2 <= 0) {
     winner = "p1";
-  } else if (hp1 <= 0) {
-    winner = "p2";
   } else {
-    if (hp1 !== hp2) {
-      winner = hp1 > hp2 ? "p1" : "p2";
-    } else {
-      winner = totalStats1 >= totalStats2 ? "p1" : "p2";
-    }
+    // hp1 <= 0, hp2 > 0
+    winner = "p2";
   }
 
   return {

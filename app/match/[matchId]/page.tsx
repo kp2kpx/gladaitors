@@ -146,7 +146,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
       ? `STR:${g1Data[0]} SPD:${g1Data[1]} DEF:${g1Data[2]}`
       : "";
     const text = encodeURIComponent(
-      `My gladiator just ${won ? "WON" : "fought hard"} in GLADAITOR on Base! ${statsStr}\nFight #${matchId} - gladaitors.vercel.app`
+      `My gladaitor just ${won ? "WON" : "fought hard"} in GLADAITOR on Base! ${statsStr}\nFight #${matchId} - gladaitors.vercel.app`
     );
     window.open(
       `https://warpcast.com/~/compose?text=${text}`,
@@ -289,7 +289,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
             {isParticipant && !myGladiatorSubmitted && (
               <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
                 <p className="text-sm text-gray-400 uppercase tracking-widest mb-4">
-                  Submit Your Gladiator
+                  Submit Your Gladaitor
                 </p>
                 <StatAllocator
                   stats={pendingStats}
@@ -304,14 +304,14 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
                   onClick={handleSubmitGladiator}
                   disabled={!pendingStatsValid || submitPending || submitConfirming}
                 >
-                  {submitPending || submitConfirming ? "Submitting..." : "Submit Gladiator"}
+                  {submitPending || submitConfirming ? "Submitting..." : "Submit Gladaitor"}
                 </button>
               </div>
             )}
 
             {isParticipant && myGladiatorSubmitted && !g1Submitted !== !g2Submitted && (
               <div className="text-center text-amber-400 text-sm animate-pulse py-4">
-                Waiting for opponent to submit their gladiator...
+                Waiting for opponent to submit their gladaitor...
               </div>
             )}
           </div>
@@ -339,10 +339,10 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
 
             <div className="bg-gray-900 border border-amber-900 rounded-lg p-6 text-center">
               <div className="text-2xl font-bold text-amber-400 mb-2 animate-pulse">
-                GLADIATORS READY
+                GLADAITORS READY
               </div>
               <p className="text-gray-400 text-sm mb-4">
-                Both gladiators have been submitted. Anyone can trigger the fight.
+                Both gladaitors have been submitted. Anyone can trigger the fight.
               </p>
               <button
                 className="btn-primary"

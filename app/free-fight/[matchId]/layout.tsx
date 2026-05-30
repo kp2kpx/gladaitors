@@ -14,10 +14,10 @@ export async function generateMetadata({
 
   return {
     title: "GLADAITORS — Fight Challenge",
-    description: "I challenge you for a free gladiator fight. Build your champion and fight back.",
+    description: "I challenge you for a free gladaitor fight. Build your champion and fight back.",
     openGraph: {
       title: "GLADAITORS — Fight Challenge",
-      description: "Build your gladiator and fight for glory.",
+      description: "Build your gladaitor and fight for glory.",
       images: [{ url: ogUrl, width: 1200, height: 1200 }],
     },
     other: {

@@ -6,7 +6,7 @@ import { baseSepolia } from "viem/chains";
 // House wallet sponsors gas by calling claimFor(winner) on the contract.
 // The house private key stays server-side and never touches the client.
 const HOUSE_PRIVATE_KEY = process.env.HOUSE_PRIVATE_KEY as `0x${string}`;
-const PIT_ARENA_ADDRESS = "0x152B456d83a20beC8aFf44e7c4f9CA4bd0f3e8a3" as const;
+const PIT_ARENA_ADDRESS = "0x7581a548C0D1E2162Ba18D504A34dd0f2309e2b9" as const;
 
 const CLAIM_ABI = parseAbi([
   "function claimFor(address winner) external",

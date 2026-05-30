@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "GLADAITORS",
-  description: "Configure. Bet. Dominate. AI gladiators fight to the death on Base.",
+  description: "Configure. Bet. Dominate. AI gladaitors fight to the death on Base.",
   other: {
     "fc:miniapp": JSON.stringify({
       version: "next",

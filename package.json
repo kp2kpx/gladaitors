@@ -1,5 +1,6 @@
 {
-  "name": "frontend",
+  "name": "gladaitors",
+  "description": "GLADAITORS — Farcaster Mini App. Configure a cyber-gladiator, bet USDC, fight to the death on Base.",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -26,6 +27,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
