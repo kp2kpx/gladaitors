@@ -1,8 +1,8 @@
 {
   "accountAssociation": {
-    "header": "PLACEHOLDER_REPLACE_WITH_REAL_VALUE",
-    "payload": "PLACEHOLDER_REPLACE_WITH_REAL_VALUE",
-    "signature": "PLACEHOLDER_REPLACE_WITH_REAL_VALUE"
+    "header": "eyJmaWQiOjE4OTA1MiwidHlwZSI6ImF1dGgiLCJrZXkiOiIweDdmNGQzMTVBNWQ5ZjlBNWNCNjM5ODRDMTNFN0FmMzkwRmUwQkIxQUIifQ",
+    "payload": "eyJkb21haW4iOiJnbGFkYWl0b3JzLnZlcmNlbC5hcHAifQ",
+    "signature": "hKOju2kTZ7TO+dLZMWzmEb/o7d2c3rYgo5MQT61qjFFSqtdpXmzS34F8TZ7i4Vvk305DbkC8CgFI372LG5xD5Bs="
   },
   "frame": {
     "version": "next",
