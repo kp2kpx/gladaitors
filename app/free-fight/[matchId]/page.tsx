@@ -269,29 +269,46 @@ export default function FreeFightRoom({
   }
 
   if (view === "waiting_p2") {
-    const shareUrl =
+    const origin =
       typeof window !== "undefined"
-        ? `${window.location.origin}/free-fight/${matchId}`
-        : `https://gladaitors.vercel.app/free-fight/${matchId}`;
+        ? window.location.origin
+        : "https://gladaitors.vercel.app";
+    const fightUrl = `${origin}/free-fight/${matchId}`;
+    const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(
+      "Come fight me in GLADAITOR! ⚔️ Configure your gladiator and challenge me (FREE)"
+    )}&embeds[]=${encodeURIComponent(fightUrl)}`;
 
     return (
       <div className="arena-bg min-h-screen flex flex-col">
         <Header router={router} />
         <main className="flex-1 max-w-lg mx-auto w-full px-4 py-16 text-center">
-          <div className="text-3xl font-bold text-amber-400 mb-2">WAITING FOR OPPONENT</div>
-          <p className="text-gray-400 text-sm mb-6">
-            Share this link. The fight resolves the moment they join.
-          </p>
-          <div className="bg-black border border-gray-700 rounded-lg px-4 py-3 mb-6 font-mono text-sm text-gray-300 break-all">
-            {shareUrl}
+          <div className="text-3xl font-bold mb-2" style={{ color: "#b8860b" }}>
+            WAITING FOR OPPONENT
           </div>
-          <button
-            className="btn-primary w-full mb-3"
-            onClick={() => navigator.clipboard.writeText(shareUrl).catch(() => {})}
+          <p className="text-sm mb-6" style={{ color: "#8b6a40" }}>
+            Share this fight — opens in Farcaster as a Mini App.
+          </p>
+          <div
+            className="rounded-lg px-4 py-3 mb-5 font-mono text-sm break-all"
+            style={{ background: "#e0d4bc", border: "1px solid #c4a882", color: "#4a3010" }}
           >
-            Copy Link
-          </button>
-          <p className="text-gray-600 text-xs animate-pulse">Checking for opponent...</p>
+            {fightUrl}
+          </div>
+          <div className="space-y-3 mb-4">
+            <button
+              className="btn-primary w-full"
+              onClick={() => window.open(warpcastUrl, "_blank", "noopener,noreferrer")}
+            >
+              Share on Warpcast
+            </button>
+            <button
+              className="btn-secondary w-full"
+              onClick={() => navigator.clipboard.writeText(fightUrl).catch(() => {})}
+            >
+              Copy Link
+            </button>
+          </div>
+          <p className="text-xs animate-pulse" style={{ color: "#9a7a50" }}>Checking for opponent...</p>
         </main>
         <Footer />
       </div>

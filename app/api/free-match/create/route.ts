@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
-    const { wallet, fid } = await req.json();
+    const { wallet, fid, isPublic } = await req.json();
 
     if (!wallet || typeof wallet !== "string") {
       return NextResponse.json({ error: "wallet required" }, { status: 400 });
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       player1: wallet.toLowerCase(),
       player1Fid: fid ? Number(fid) : undefined,
       state: "waiting",
+      isPublic: !!isPublic,
       createdAt: Date.now(),
     });
 

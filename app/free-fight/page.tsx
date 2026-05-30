@@ -51,6 +51,7 @@ export default function FreeFightCreate() {
   const { address, fid, isAuthed } = useFarcasterAuth();
 
   const [step, setStep] = useState<Step>("configure");
+  const [isPublic, setIsPublic] = useState(true);
   const [stats, setStats] = useState<GladiatorStats>(DEFAULT_STATS);
   const [createdMatchId, setCreatedMatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +59,6 @@ export default function FreeFightCreate() {
   const statsValid =
     Object.values(stats).reduce((a, b) => a + b, 0) === TOTAL_POINTS;
 
-  // Load last-used stats from localStorage when wallet is available
   useEffect(() => {
     if (!address) return;
     const saved = loadSavedStats(address);
@@ -70,35 +70,29 @@ export default function FreeFightCreate() {
     setStep("creating");
     setError(null);
 
-    // Persist this build so the allocator pre-fills next time
     saveStats(address, stats);
 
     try {
       const res = await fetch("/api/free-match/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: address, fid }),
+        body: JSON.stringify({ wallet: address, fid, isPublic }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create fight");
 
       const matchId: string = data.matchId;
 
-      // Store player1 stats on the match record
       await fetch(`/api/free-match/${matchId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stats1: stats }),
       });
 
-      // Award cast-verified points (cast gate already passed)
       await fetch("/api/points/award", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          wallet: address,
-          action: "free_fight_cast_verified",
-        }),
+        body: JSON.stringify({ wallet: address, action: "free_fight_cast_verified" }),
       }).catch(() => {});
 
       setCreatedMatchId(matchId);
@@ -110,29 +104,46 @@ export default function FreeFightCreate() {
   }
 
   if (step === "done" && createdMatchId) {
-    const shareUrl =
+    const origin =
       typeof window !== "undefined"
-        ? `${window.location.origin}/free-fight/${createdMatchId}`
-        : `https://gladaitors.vercel.app/free-fight/${createdMatchId}`;
+        ? window.location.origin
+        : "https://gladaitors.vercel.app";
+    const fightUrl = `${origin}/free-fight/${createdMatchId}`;
+    const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(
+      "Come fight me in GLADAITOR! ⚔️ Configure your gladiator and challenge me (FREE)"
+    )}&embeds[]=${encodeURIComponent(fightUrl)}`;
 
     return (
       <div className="arena-bg min-h-screen flex flex-col">
         <Navbar><WalletButton /></Navbar>
         <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
-          <div className="text-4xl font-bold text-amber-400 mb-2">FREE FIGHT CREATED</div>
-          <p className="text-gray-400 text-sm mb-8">
-            Share this link with your opponent. They cast their entry, configure their gladiator,
-            and the fight resolves instantly in the browser.
+          <div className="text-4xl font-bold mb-2" style={{ color: "#b8860b" }}>
+            FREE FIGHT CREATED
+          </div>
+          {isPublic && (
+            <p className="text-xs mb-4 font-bold uppercase tracking-widest" style={{ color: "#4a7c59" }}>
+              Listed in Open Fights
+            </p>
+          )}
+          <p className="text-sm mb-6" style={{ color: "#8b6a40" }}>
+            Share with your opponent — opens directly in Farcaster.
           </p>
-          <div className="bg-black border border-gray-700 rounded-lg px-4 py-3 mb-6 font-mono text-sm text-gray-300 break-all">
-            {shareUrl}
+          <div
+            className="rounded-lg px-4 py-3 mb-6 font-mono text-sm break-all"
+            style={{ background: "#e0d4bc", border: "1px solid #c4a882", color: "#4a3010" }}
+          >
+            {fightUrl}
           </div>
           <div className="space-y-3">
             <button
               className="btn-primary w-full"
-              onClick={() => {
-                navigator.clipboard.writeText(shareUrl).catch(() => {});
-              }}
+              onClick={() => window.open(warpcastUrl, "_blank", "noopener,noreferrer")}
+            >
+              Share on Warpcast
+            </button>
+            <button
+              className="btn-secondary w-full"
+              onClick={() => navigator.clipboard.writeText(fightUrl).catch(() => {})}
             >
               Copy Link
             </button>
@@ -143,7 +154,8 @@ export default function FreeFightCreate() {
               Go to Fight Room
             </button>
             <button
-              className="text-xs text-gray-600 hover:text-gray-400 transition-colors mt-2 block mx-auto"
+              className="text-xs transition-colors mt-2 block mx-auto"
+              style={{ color: "#9a7a50" }}
               onClick={() => router.push("/")}
             >
               Back to Home
@@ -161,20 +173,54 @@ export default function FreeFightCreate() {
 
       <main className="flex-1 max-w-lg mx-auto w-full px-6 py-10">
         <div className="flex items-center gap-3 mb-2">
-          <span className="bg-green-900 text-green-400 text-xs font-bold uppercase tracking-widest px-2 py-1 rounded">
+          <span
+            className="text-xs font-bold uppercase tracking-widest px-2 py-1 rounded"
+            style={{ background: "#2a4a2a", color: "#6abf6a" }}
+          >
             FREE
           </span>
-          <h1 className="text-2xl font-bold text-white uppercase tracking-widest">
+          <h1 className="text-2xl font-bold uppercase tracking-widest" style={{ color: "#3a2010" }}>
             Free Fight
           </h1>
         </div>
-        <p className="text-gray-500 text-sm mb-8">
-          No USDC required. Build your gladiator and challenge anyone. Fight resolves
-          instantly, off-chain.
+        <p className="text-sm mb-8" style={{ color: "#8b6a40" }}>
+          No USDC required. Build your gladiator and challenge anyone. Fight resolves instantly, off-chain.
         </p>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-6">
-          <label className="block text-xs text-gray-400 uppercase tracking-widest mb-4">
+        {/* Public / Private toggle */}
+        <div
+          className="rounded-lg p-4 mb-5 flex items-center justify-between"
+          style={{ background: "#e8dcc8", border: "1px solid #c4a882" }}
+        >
+          <div>
+            <div className="text-xs font-bold uppercase tracking-widest mb-0.5" style={{ color: "#6b4c2a" }}>
+              {isPublic ? "Public Fight" : "Private Fight"}
+            </div>
+            <div className="text-xs" style={{ color: "#9a7a50" }}>
+              {isPublic ? "Listed in Open Fights on the home screen" : "Join via link only"}
+            </div>
+          </div>
+          <button
+            onClick={() => setIsPublic(!isPublic)}
+            className="relative inline-flex items-center w-12 h-6 rounded-full transition-colors focus:outline-none"
+            style={{ background: isPublic ? "#8b1a1a" : "#c4a882" }}
+          >
+            <span
+              className="inline-block w-5 h-5 rounded-full transition-transform"
+              style={{
+                background: "#fff",
+                transform: isPublic ? "translateX(26px)" : "translateX(2px)",
+              }}
+            />
+          </button>
+        </div>
+
+        {/* Stat allocator */}
+        <div
+          className="rounded-lg p-5 mb-6"
+          style={{ background: "#e8dcc8", border: "1px solid #c4a882" }}
+        >
+          <label className="block text-xs uppercase tracking-widest mb-4" style={{ color: "#6b4c2a" }}>
             Build Your Gladiator
           </label>
           <StatAllocator
@@ -186,13 +232,13 @@ export default function FreeFightCreate() {
         </div>
 
         {error && (
-          <div className="bg-red-950 border border-red-800 text-red-400 text-sm rounded p-3 mb-4">
+          <div className="rounded p-3 mb-4 text-sm" style={{ background: "#3a0a0a", border: "1px solid #8b1a1a", color: "#e88" }}>
             {error}
           </div>
         )}
 
         {step === "creating" && (
-          <div className="text-center py-3 mb-4 text-amber-400 text-sm animate-pulse">
+          <div className="text-center py-3 mb-4 text-sm animate-pulse" style={{ color: "#b8860b" }}>
             Creating free fight...
           </div>
         )}
@@ -206,7 +252,7 @@ export default function FreeFightCreate() {
         </button>
 
         {!statsValid && isAuthed && (
-          <p className="text-xs text-red-400 text-center mt-2">
+          <p className="text-xs text-center mt-2" style={{ color: "#c04040" }}>
             Allocate all {TOTAL_POINTS} stat points before continuing.
           </p>
         )}

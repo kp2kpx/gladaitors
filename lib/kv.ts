@@ -15,6 +15,7 @@ export interface FreeMatch {
   player2?: string;
   player2Fid?: number;
   state: FreeMatchState;
+  isPublic?: boolean;
   // Stats stored after both configure
   stats1?: {
     strength: number;
@@ -55,6 +56,28 @@ export async function setFreeMatch(match: FreeMatch): Promise<void> {
 
 export async function getFreeMatch(matchId: string): Promise<FreeMatch | null> {
   return await kv.get<FreeMatch>(`free_match:${matchId}`);
+}
+
+/**
+ * Return public free matches that are still waiting for a second player.
+ */
+export async function getPublicFreeMatches(): Promise<FreeMatch[]> {
+  const results: FreeMatch[] = [];
+  let cursor = 0;
+  do {
+    const [nextCursor, keys] = await kv.scan(cursor, {
+      match: "free_match:*",
+      count: 100,
+    });
+    cursor = Number(nextCursor);
+    if (keys.length > 0) {
+      const values = await Promise.all(keys.map((k) => kv.get<FreeMatch>(k)));
+      for (const m of values) {
+        if (m && m.state === "waiting" && m.isPublic) results.push(m);
+      }
+    }
+  } while (cursor !== 0);
+  return results.sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
 }
 
 /**

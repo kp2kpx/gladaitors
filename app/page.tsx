@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useReadContract } from "wagmi";
 import { formatUnits } from "viem";
@@ -11,32 +11,51 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { PIT_ARENA_ABI, PIT_ARENA_ADDRESS } from "@/lib/contract";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
+import type { FreeMatch } from "@/lib/kv";
 
 export default function Home() {
   const router = useRouter();
   const { isAuthed, address, pfpUrl, username } = useFarcasterAuth();
+  const [publicFreeMatches, setPublicFreeMatches] = useState<FreeMatch[]>([]);
 
-  // Signal to Farcaster client that the app is ready — hides the splash screen.
   useEffect(() => {
     sdk.actions.ready().catch(() => {});
   }, []);
 
+  // On-chain paid open matches
   const { data: openIds, refetch } = useReadContract({
     address: PIT_ARENA_ADDRESS,
     abi: PIT_ARENA_ABI,
     functionName: "getOpenMatches",
   });
 
+  // Public free matches from KV
+  async function fetchFreeMatches() {
+    try {
+      const res = await fetch("/api/free-match/open");
+      if (res.ok) setPublicFreeMatches(await res.json());
+    } catch {
+      // ignore
+    }
+  }
+
   useEffect(() => {
-    const interval = setInterval(() => refetch(), 10000);
+    fetchFreeMatches();
+    const interval = setInterval(() => {
+      refetch();
+      fetchFreeMatches();
+    }, 10000);
     return () => clearInterval(interval);
   }, [refetch]);
+
+  const hasPaidFights = openIds && openIds.length > 0;
+  const hasFreeFights = publicFreeMatches.length > 0;
+  const hasAnyFights = hasPaidFights || hasFreeFights;
 
   return (
     <div className="arena-bg min-h-screen flex flex-col">
       <Navbar>
         <WalletButton />
-        {/* Profile avatar — clickable, navigates to /profile */}
         <button
           onClick={() => router.push("/profile")}
           className="flex items-center gap-2 rounded-full border transition-colors px-2 py-1"
@@ -105,7 +124,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Fight Aitor card */}
+        {/* Fight Aitor */}
         <div className="flex justify-center mb-4">
           <button
             className="btn-bot text-base py-3 px-8 w-full sm:w-auto"
@@ -141,6 +160,7 @@ export default function Home() {
           </button>
         </div>
 
+        {/* Open Fights */}
         <div>
           <h2
             className="text-sm font-bold uppercase tracking-widest mb-4 flex items-center gap-2"
@@ -153,7 +173,7 @@ export default function Home() {
             Open Fights
           </h2>
 
-          {!openIds || openIds.length === 0 ? (
+          {!hasAnyFights ? (
             <div
               className="text-center py-12 border border-dashed rounded-lg"
               style={{ borderColor: "#c4a882" }}
@@ -164,7 +184,17 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-2">
-              {openIds.map((id) => (
+              {/* Free fights first */}
+              {publicFreeMatches.map((m) => (
+                <FreeMatchRow
+                  key={m.id}
+                  match={m}
+                  currentAddress={address ?? undefined}
+                  onJoin={() => router.push(`/free-fight/${m.id}`)}
+                />
+              ))}
+              {/* Paid on-chain fights */}
+              {openIds?.map((id) => (
                 <MatchRow
                   key={id.toString()}
                   matchId={id}
@@ -177,6 +207,56 @@ export default function Home() {
         </div>
       </main>
       <Footer />
+    </div>
+  );
+}
+
+function FreeMatchRow({
+  match,
+  currentAddress,
+  onJoin,
+}: {
+  match: FreeMatch;
+  currentAddress?: string;
+  onJoin: () => void;
+}) {
+  const isOwn = currentAddress?.toLowerCase() === match.player1.toLowerCase();
+
+  return (
+    <div
+      className="match-card flex items-center justify-between"
+      onClick={() => !isOwn && onJoin()}
+      style={{ cursor: isOwn ? "default" : "pointer" }}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className="text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded"
+          style={{ background: "#2a4a2a", color: "#6abf6a" }}
+        >
+          FREE
+        </span>
+        <div>
+          <div className="text-xs mb-0.5" style={{ color: "#9a7a50" }}>
+            Free Fight
+          </div>
+          <div className="text-sm font-mono" style={{ color: "#3a2010" }}>
+            {match.player1.slice(0, 8)}...{match.player1.slice(-4)}
+          </div>
+          {isOwn && (
+            <div className="text-xs mt-0.5" style={{ color: "#b8860b" }}>
+              Your fight — waiting for opponent
+            </div>
+          )}
+        </div>
+      </div>
+      {!isOwn && (
+        <div
+          className="text-xs font-bold uppercase tracking-widest"
+          style={{ color: "#8b1a1a" }}
+        >
+          Join Free
+        </div>
+      )}
     </div>
   );
 }
