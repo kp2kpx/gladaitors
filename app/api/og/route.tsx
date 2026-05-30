@@ -26,29 +26,15 @@ export async function GET(request: Request) {
           gap: "0px",
         }}
       >
-        {/* Top branding */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            marginBottom: "32px",
-          }}
-        >
-          <div style={{ width: "60px", height: "3px", background: "#8b1a1a", display: "flex" }} />
-          <div
-            style={{
-              fontSize: 28,
-              fontWeight: "bold",
-              color: "#8b1a1a",
-              letterSpacing: "0.35em",
-              textTransform: "uppercase",
-              display: "flex",
-            }}
-          >
-            ⚔ GLADAITORS ⚔
-          </div>
-          <div style={{ width: "60px", height: "3px", background: "#8b1a1a", display: "flex" }} />
+        {/* Top — logo */}
+        <div style={{ display: "flex", alignItems: "center", marginBottom: "32px" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`${BASE}/logo.png`}
+            width={120}
+            height={120}
+            style={{ objectFit: "contain" }}
+          />
         </div>
 
         {/* Character — centered, large */}
@@ -106,35 +92,6 @@ export async function GET(request: Request) {
           {sub}
         </div>
 
-        {/* Footer badge */}
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: "bold",
-              color: "#fff",
-              background: "#2a4a2a",
-              padding: "6px 16px",
-              borderRadius: "6px",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              display: "flex",
-            }}
-          >
-            FREE
-          </div>
-          <div
-            style={{
-              fontSize: 16,
-              color: "#9a7a50",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              display: "flex",
-            }}
-          >
-            gladaitors.vercel.app
-          </div>
-        </div>
       </div>
     ),
     {
