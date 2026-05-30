@@ -191,6 +191,7 @@ export default function Home() {
                   match={m}
                   currentAddress={address ?? undefined}
                   onJoin={() => router.push(`/free-fight/${m.id}`)}
+                  onDeleted={fetchFreeMatches}
                 />
               ))}
               {/* Paid on-chain fights */}
@@ -215,18 +216,33 @@ function FreeMatchRow({
   match,
   currentAddress,
   onJoin,
+  onDeleted,
 }: {
   match: FreeMatch;
   currentAddress?: string;
   onJoin: () => void;
+  onDeleted: () => void;
 }) {
+  const [deleting, setDeleting] = useState(false);
   const isOwn = currentAddress?.toLowerCase() === match.player1.toLowerCase();
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!currentAddress) return;
+    setDeleting(true);
+    await fetch(`/api/free-match/${match.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet: currentAddress }),
+    }).catch(() => {});
+    onDeleted();
+  }
 
   return (
     <div
       className="match-card flex items-center justify-between"
-      onClick={() => !isOwn && onJoin()}
-      style={{ cursor: isOwn ? "default" : "pointer" }}
+      onClick={onJoin}
+      style={{ cursor: "pointer" }}
     >
       <div className="flex items-center gap-3">
         <span
@@ -249,14 +265,27 @@ function FreeMatchRow({
           )}
         </div>
       </div>
-      {!isOwn && (
-        <div
-          className="text-xs font-bold uppercase tracking-widest"
-          style={{ color: "#8b1a1a" }}
-        >
-          Join Free
-        </div>
-      )}
+      <div className="flex items-center gap-3">
+        {isOwn ? (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-xs font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors"
+            style={{ color: "#8b1a1a", border: "1px solid #c4a882" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#f5e8d0")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            {deleting ? "..." : "Cancel"}
+          </button>
+        ) : (
+          <div
+            className="text-xs font-bold uppercase tracking-widest"
+            style={{ color: "#8b1a1a" }}
+          >
+            Join Free
+          </div>
+        )}
+      </div>
     </div>
   );
 }
