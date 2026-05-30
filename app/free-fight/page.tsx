@@ -139,7 +139,7 @@ export default function FreeFightCreate() {
               className="btn-primary w-full"
               onClick={() => window.open(warpcastUrl, "_blank", "noopener,noreferrer")}
             >
-              Share on Warpcast
+              Share on Farcaster
             </button>
             <button
               className="btn-secondary w-full"

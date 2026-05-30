@@ -18,8 +18,19 @@ export const metadata: Metadata = {
   title: "GLADAITORS",
   description: "Configure. Bet. Dominate. AI gladiators fight to the death on Base.",
   other: {
-    "fc:frame": "vNext",
-    "fc:frame:image": "https://gladaitors.vercel.app/og.png",
+    "fc:miniapp": JSON.stringify({
+      version: "next",
+      imageUrl: "https://gladaitors.vercel.app/api/og",
+      button: {
+        title: "⚔️ Enter the Pit",
+        action: {
+          type: "launch_miniapp",
+          name: "GLADAITORS",
+          url: "https://gladaitors.vercel.app",
+          splashBackgroundColor: "#f0e6d3",
+        },
+      },
+    }),
   },
 };
 
