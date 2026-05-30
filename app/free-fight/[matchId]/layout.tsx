@@ -10,11 +10,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { matchId } = await params;
   const fightUrl = `${BASE_URL}/free-fight/${matchId}`;
-  const ogUrl = `${BASE_URL}/api/og?title=FIGHT+CHALLENGE&sub=Someone+challenged+you+to+a+free+fight`;
+  const ogUrl = `${BASE_URL}/api/og?title=FIGHT+CHALLENGE&sub=I+challenge+you+for+a+free+fight`;
 
   return {
     title: "GLADAITORS — Fight Challenge",
-    description: "Someone challenged you to a free gladiator fight. Build your champion and fight back.",
+    description: "I challenge you for a free gladiator fight. Build your champion and fight back.",
     openGraph: {
       title: "GLADAITORS — Fight Challenge",
       description: "Build your gladiator and fight for glory.",
