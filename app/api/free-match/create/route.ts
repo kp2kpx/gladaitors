@@ -10,12 +10,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "wallet required" }, { status: 400 });
     }
 
+    // Accept both 0x wallet addresses and fid: prefixed identifiers for wallet-less users.
+    // fid: prefixed IDs are stored as-is (lowercase); wallet addresses are also lowercased.
+    const isFidId = wallet.startsWith("fid:");
+    const playerId = isFidId ? wallet.toLowerCase() : wallet.toLowerCase();
+
+    // If the wallet is a fid: prefixed string, extract the FID from it as a fallback
+    // (the client also sends fid separately, but this ensures consistency).
+    const resolvedFid = fid
+      ? Number(fid)
+      : isFidId
+      ? Number(wallet.slice(4))
+      : undefined;
+
     const id = randomUUID();
 
     await setFreeMatch({
       id,
-      player1: wallet.toLowerCase(),
-      player1Fid: fid ? Number(fid) : undefined,
+      player1: playerId,
+      player1Fid: resolvedFid,
       state: "waiting",
       isPublic: !!isPublic,
       createdAt: Date.now(),

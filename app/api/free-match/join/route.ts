@@ -12,6 +12,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Accept both 0x wallet addresses and fid: prefixed identifiers
+    const isFidId = typeof wallet === "string" && wallet.startsWith("fid:");
+    const playerId = typeof wallet === "string" ? wallet.toLowerCase() : "";
+
+    // Extract FID from fid: prefix if not sent separately
+    const resolvedFid = fid
+      ? Number(fid)
+      : isFidId
+      ? Number(wallet.slice(4))
+      : undefined;
+
     const match = await getFreeMatch(matchId);
     if (!match) {
       return NextResponse.json({ error: "match not found" }, { status: 404 });
@@ -22,7 +33,7 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       );
     }
-    if (match.player1.toLowerCase() === wallet.toLowerCase()) {
+    if (match.player1.toLowerCase() === playerId) {
       return NextResponse.json(
         { error: "cannot join your own match" },
         { status: 400 }
@@ -31,8 +42,8 @@ export async function POST(req: NextRequest) {
 
     await setFreeMatch({
       ...match,
-      player2: wallet.toLowerCase(),
-      player2Fid: fid ? Number(fid) : undefined,
+      player2: playerId,
+      player2Fid: resolvedFid,
       stats2: stats,
       state: "ready",
     });

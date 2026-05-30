@@ -15,7 +15,10 @@ import type { FreeMatch } from "@/lib/kv";
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthed, address, pfpUrl, username } = useFarcasterAuth();
+  const { isAuthed, address, fid, pfpUrl, username } = useFarcasterAuth();
+
+  // Unified identifier: wallet address if connected, fid: prefix for wallet-less Farcaster users
+  const playerId = address ?? (fid ? `fid:${fid}` : undefined);
   const [publicFreeMatches, setPublicFreeMatches] = useState<FreeMatch[]>([]);
 
   useEffect(() => {
@@ -189,7 +192,7 @@ export default function Home() {
                 <FreeMatchRow
                   key={m.id}
                   match={m}
-                  currentAddress={address ?? undefined}
+                  currentPlayerId={playerId}
                   onJoin={() => router.push(`/free-fight/${m.id}`)}
                   onDeleted={fetchFreeMatches}
                 />
@@ -212,28 +215,64 @@ export default function Home() {
   );
 }
 
+/**
+ * Format a player ID for display in match lists.
+ * Wallet addresses: "0x1234...abcd"
+ * FID-prefixed IDs: "FID #189052"
+ */
+function formatPlayerIdForDisplay(id: string): string {
+  if (id.startsWith("fid:")) {
+    return `FID #${id.slice(4)}`;
+  }
+  if (id.length >= 10) {
+    return `${id.slice(0, 8)}...${id.slice(-4)}`;
+  }
+  return id;
+}
+
 function FreeMatchRow({
   match,
-  currentAddress,
+  currentPlayerId,
   onJoin,
   onDeleted,
 }: {
   match: FreeMatch;
-  currentAddress?: string;
+  currentPlayerId?: string;
   onJoin: () => void;
   onDeleted: () => void;
 }) {
   const [deleting, setDeleting] = useState(false);
-  const isOwn = currentAddress?.toLowerCase() === match.player1.toLowerCase();
+  const [player1Username, setPlayer1Username] = useState<string | null>(null);
+  const isOwn = currentPlayerId?.toLowerCase() === match.player1.toLowerCase();
+
+  // Fetch Farcaster username for player1 if FID is available.
+  // For fid: prefixed player1 IDs, extract FID from the string as a fallback.
+  const player1Fid = match.player1Fid ?? (
+    match.player1.startsWith("fid:") ? Number(match.player1.slice(4)) : undefined
+  );
+
+  useEffect(() => {
+    if (!player1Fid) return;
+    fetch(`/api/user/farcaster?fid=${player1Fid}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.username) setPlayer1Username(data.username);
+      })
+      .catch(() => {});
+  }, [player1Fid]);
+
+  const player1Display = player1Username
+    ? `@${player1Username}`
+    : formatPlayerIdForDisplay(match.player1);
 
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation();
-    if (!currentAddress) return;
+    if (!currentPlayerId) return;
     setDeleting(true);
     await fetch(`/api/free-match/${match.id}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet: currentAddress }),
+      body: JSON.stringify({ wallet: currentPlayerId }),
     }).catch(() => {});
     onDeleted();
   }
@@ -255,9 +294,11 @@ function FreeMatchRow({
           <div className="text-xs mb-0.5" style={{ color: "#9a7a50" }}>
             Free Fight
           </div>
-          <div className="text-sm font-mono" style={{ color: "#3a2010" }}>
-            {match.player1.slice(0, 8)}...{match.player1.slice(-4)}
-          </div>
+          {!isOwn && (
+            <div className="text-sm font-mono" style={{ color: "#3a2010" }}>
+              {player1Display}
+            </div>
+          )}
           {isOwn && (
             <div className="text-xs mt-0.5" style={{ color: "#b8860b" }}>
               Your fight — waiting for opponent
