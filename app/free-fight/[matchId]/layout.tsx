@@ -18,7 +18,7 @@ export async function generateMetadata({
     openGraph: {
       title: "GLADAITORS — Fight Challenge",
       description: "Build your gladiator and fight for glory.",
-      images: [{ url: ogUrl, width: 1200, height: 630 }],
+      images: [{ url: ogUrl, width: 1200, height: 1200 }],
     },
     other: {
       "fc:miniapp": JSON.stringify({

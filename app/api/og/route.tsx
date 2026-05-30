@@ -16,159 +16,130 @@ export async function GET(request: Request) {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "row",
-          background: "radial-gradient(ellipse at 35% 50%, #f8f0e0 0%, #f0e6d3 45%, #e0d0b0 100%)",
-          border: "10px solid #8b1a1a",
-          fontFamily: "Georgia, serif",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "radial-gradient(ellipse at 50% 40%, #f8f0e0 0%, #f0e6d3 50%, #deccaa 100%)",
+          border: "14px solid #8b1a1a",
           boxSizing: "border-box",
+          fontFamily: "Georgia, serif",
+          gap: "0px",
         }}
       >
-        {/* Left content */}
+        {/* Top branding */}
         <div
           style={{
-            flex: 1,
             display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            padding: "48px 32px 48px 60px",
-            minWidth: 0,
+            alignItems: "center",
+            gap: "16px",
+            marginBottom: "32px",
           }}
         >
-          {/* Branding row */}
+          <div style={{ width: "60px", height: "3px", background: "#8b1a1a", display: "flex" }} />
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              marginBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 18,
-                fontWeight: "bold",
-                color: "#8b1a1a",
-                letterSpacing: "0.3em",
-                textTransform: "uppercase",
-                display: "flex",
-              }}
-            >
-              ⚔ GLADAITORS ⚔
-            </div>
-          </div>
-
-          {/* Title — 62px keeps "FIGHT CHALLENGE" on one line */}
-          <div
-            style={{
-              fontSize: 62,
+              fontSize: 28,
               fontWeight: "bold",
-              color: "#b8860b",
-              letterSpacing: "0.06em",
+              color: "#8b1a1a",
+              letterSpacing: "0.35em",
               textTransform: "uppercase",
-              lineHeight: 1.05,
-              marginBottom: "24px",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {title}
-          </div>
-
-          {/* Sub */}
-          <div
-            style={{
-              fontSize: 26,
-              color: "#6b4c2a",
-              fontStyle: "italic",
-              letterSpacing: "0.03em",
-              marginBottom: "36px",
               display: "flex",
             }}
           >
-            {sub}
+            ⚔ GLADAITORS ⚔
           </div>
-
-          {/* Footer row */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: "bold",
-                color: "#ffffff",
-                background: "#2a4a2a",
-                padding: "4px 12px",
-                borderRadius: "4px",
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                display: "flex",
-              }}
-            >
-              FREE
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: "#9a7a50",
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                display: "flex",
-              }}
-            >
-              gladaitors.vercel.app
-            </div>
-          </div>
+          <div style={{ width: "60px", height: "3px", background: "#8b1a1a", display: "flex" }} />
         </div>
 
-        {/* Divider */}
+        {/* Character — centered, large */}
         <div
           style={{
-            width: "2px",
-            background: "#c4a882",
-            margin: "40px 0",
-            display: "flex",
-          }}
-        />
-
-        {/* Right — character */}
-        <div
-          style={{
-            width: "340px",
+            width: "420px",
+            height: "420px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, #ddd0b0 0%, #c4a882 65%, #a88860 100%)",
+            border: "8px solid #8b1a1a",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "24px",
+            marginBottom: "40px",
+            boxShadow: "0 0 60px rgba(139,26,26,0.3)",
           }}
         >
-          {/* Stone circle */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`${BASE}/characters/red/idle.png`}
+            width={340}
+            height={340}
+            style={{ imageRendering: "pixelated", objectFit: "contain" }}
+          />
+        </div>
+
+        {/* Title */}
+        <div
+          style={{
+            fontSize: 72,
+            fontWeight: "bold",
+            color: "#b8860b",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            textAlign: "center",
+            marginBottom: "20px",
+            display: "flex",
+          }}
+        >
+          {title}
+        </div>
+
+        {/* Subtitle */}
+        <div
+          style={{
+            fontSize: 30,
+            color: "#6b4c2a",
+            fontStyle: "italic",
+            letterSpacing: "0.04em",
+            textAlign: "center",
+            marginBottom: "36px",
+            display: "flex",
+          }}
+        >
+          {sub}
+        </div>
+
+        {/* Footer badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           <div
             style={{
-              width: "280px",
-              height: "280px",
-              borderRadius: "50%",
-              background: "radial-gradient(circle, #ddd0b0 0%, #c4a882 70%, #a8885a 100%)",
-              border: "5px solid #8b1a1a",
+              fontSize: 16,
+              fontWeight: "bold",
+              color: "#fff",
+              background: "#2a4a2a",
+              padding: "6px 16px",
+              borderRadius: "6px",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`${BASE}/characters/red/idle.png`}
-              width={220}
-              height={220}
-              style={{
-                imageRendering: "pixelated",
-                objectFit: "contain",
-              }}
-            />
+            FREE
+          </div>
+          <div
+            style={{
+              fontSize: 16,
+              color: "#9a7a50",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              display: "flex",
+            }}
+          >
+            gladaitors.vercel.app
           </div>
         </div>
       </div>
     ),
     {
       width: 1200,
-      height: 630,
+      height: 1200,
     }
   );
 }
