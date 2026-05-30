@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY ?? "";
-
-// Warn once at startup (visible in Vercel logs) if key is missing.
-if (!NEYNAR_API_KEY) {
-  console.warn("[gladaitors] NEYNAR_API_KEY is not set — username resolution will return null. Set it in Vercel env vars.");
-}
-
 // GET /api/user/farcaster?fid=<number>
 // Returns { username: string | null, pfpUrl: string | null } — null if not found or lookup fails.
 export async function GET(req: NextRequest) {
+  // Read at request time, not module init — avoids stale cached value in warm lambdas.
+  const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY ?? "";
+
   const fid = req.nextUrl.searchParams.get("fid");
 
   if (!fid || isNaN(Number(fid))) {
@@ -17,6 +13,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (!NEYNAR_API_KEY) {
+    console.warn("[gladaitors] NEYNAR_API_KEY is not set — username resolution will return null.");
     return NextResponse.json({ username: null, pfpUrl: null });
   }
 
