@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY!;
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY ?? "";
+
+// Warn once at startup (visible in Vercel logs) if key is missing.
+if (!NEYNAR_API_KEY) {
+  console.warn("[gladaitors] NEYNAR_API_KEY is not set — username resolution will return null. Set it in Vercel env vars.");
+}
 
 // GET /api/user/farcaster?fid=<number>
-// Returns { username: string | null } — null if not found or lookup fails.
+// Returns { username: string | null, pfpUrl: string | null } — null if not found or lookup fails.
 export async function GET(req: NextRequest) {
   const fid = req.nextUrl.searchParams.get("fid");
 
   if (!fid || isNaN(Number(fid))) {
-    return NextResponse.json({ username: null });
+    return NextResponse.json({ username: null, pfpUrl: null });
   }
 
   if (!NEYNAR_API_KEY) {
-    return NextResponse.json({ username: null });
+    return NextResponse.json({ username: null, pfpUrl: null });
   }
 
   try {
@@ -28,12 +33,13 @@ export async function GET(req: NextRequest) {
       }
     );
 
-    if (!res.ok) return NextResponse.json({ username: null });
+    if (!res.ok) return NextResponse.json({ username: null, pfpUrl: null });
 
     const data = await res.json();
     const username: string | null = data?.users?.[0]?.username ?? null;
-    return NextResponse.json({ username });
+    const pfpUrl: string | null = data?.users?.[0]?.pfp_url ?? null;
+    return NextResponse.json({ username, pfpUrl });
   } catch {
-    return NextResponse.json({ username: null });
+    return NextResponse.json({ username: null, pfpUrl: null });
   }
 }

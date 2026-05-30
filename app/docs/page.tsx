@@ -215,7 +215,7 @@ export default function Docs() {
                 "Both players must bet the same amount",
                 "House cut: 10% of total pot",
                 "Once a fight is created, the bet is locked in the contract",
-                "Fights auto-resolve once both gladaitors are submitted",
+                "Once both gladaitors are submitted, either player can resolve the fight on-chain.",
               ].map((rule) => (
                 <li key={rule} className="flex gap-2">
                   <span className="shrink-0 font-bold" style={{ color: crimson }}>—</span>
@@ -237,7 +237,7 @@ export default function Docs() {
                 <>Call <code style={{ background: codeBg, color: "#fbbf24", padding: "1px 6px", borderRadius: "3px", fontSize: "0.75rem" }}>createMatch(betAmount)</code> with USDC approval</>,
                 <>Call <code style={{ background: codeBg, color: "#fbbf24", padding: "1px 6px", borderRadius: "3px", fontSize: "0.75rem" }}>joinMatch(matchId)</code> to accept a challenge</>,
                 <>Call <code style={{ background: codeBg, color: "#fbbf24", padding: "1px 6px", borderRadius: "3px", fontSize: "0.75rem" }}>submitGladiator(matchId, [str, spd, def, int, lck])</code> — stats must sum to 25, each 1–10</>,
-                <>Call <code style={{ background: codeBg, color: "#fbbf24", padding: "1px 6px", borderRadius: "3px", fontSize: "0.75rem" }}>resolveFight(matchId)</code> once both gladiators are submitted</>,
+                <>Call <code style={{ background: codeBg, color: "#fbbf24", padding: "1px 6px", borderRadius: "3px", fontSize: "0.75rem" }}>resolveFight(matchId)</code> once both gladaitors are submitted</>,
               ].map((item, i) => (
                 <li key={i} className="flex gap-3">
                   <span className="font-bold tabular-nums w-5 shrink-0" style={{ color: gold }}>{i + 1}.</span>

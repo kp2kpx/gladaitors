@@ -38,6 +38,9 @@ export interface FightResult {
 
 const STARTING_HP = 100;
 
+// Match the Solidity contract's round cap to prevent infinite loops in edge cases.
+const NUM_ROUNDS = 10;
+
 // Simple deterministic hash-like mixer using xorshift — good enough for client-side sim
 function nextSeed(seed: number): number {
   seed ^= seed << 13;
@@ -90,8 +93,9 @@ export function simulateFight(
   const doubleAttack = speedGap >= 3;
 
   let round = 0;
-  // Fight runs until one (or both) gladiators reach 0 HP — no turn cap.
-  while (hp1 > 0 && hp2 > 0) {
+  // Fight runs until one (or both) gladiators reach 0 HP, capped at NUM_ROUNDS
+  // to match the Solidity contract behaviour.
+  while (hp1 > 0 && hp2 > 0 && round < NUM_ROUNDS) {
     round++;
 
     if (tied) {

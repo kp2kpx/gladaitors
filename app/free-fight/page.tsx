@@ -59,24 +59,27 @@ export default function FreeFightCreate() {
   const statsValid =
     Object.values(stats).reduce((a, b) => a + b, 0) === TOTAL_POINTS;
 
+  // Use wallet address if available, otherwise fall back to fid: prefix for wallet-less users
+  const playerId = address ?? (fid ? `fid:${fid}` : null);
+
   useEffect(() => {
-    if (!address) return;
-    const saved = loadSavedStats(address);
+    if (!playerId) return;
+    const saved = loadSavedStats(playerId);
     if (saved) setStats(saved);
-  }, [address]);
+  }, [playerId]);
 
   async function handleCreate() {
-    if (!address || !isAuthed || !statsValid) return;
+    if (!playerId || !isAuthed || !statsValid) return;
     setStep("creating");
     setError(null);
 
-    saveStats(address, stats);
+    saveStats(playerId, stats);
 
     try {
       const res = await fetch("/api/free-match/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: address, fid, isPublic }),
+        body: JSON.stringify({ wallet: playerId, fid, isPublic }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create fight");
@@ -92,7 +95,7 @@ export default function FreeFightCreate() {
       await fetch("/api/points/award", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: address, action: "free_fight_cast_verified" }),
+        body: JSON.stringify({ wallet: playerId, action: "free_fight_created" }),
       }).catch(() => {});
 
       setCreatedMatchId(matchId);
@@ -246,7 +249,7 @@ export default function FreeFightCreate() {
         <button
           className="btn-primary w-full text-base py-4"
           onClick={handleCreate}
-          disabled={!isAuthed || !statsValid || step === "creating"}
+          disabled={!isAuthed || !playerId || !statsValid || step === "creating"}
         >
           {step === "creating" ? "Creating..." : "Create Free Fight"}
         </button>

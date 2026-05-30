@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isCastVerified, setCastVerified } from "@/lib/kv";
 
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY!;
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY ?? "";
+
+// Warn once at startup (visible in Vercel logs) if key is missing.
+if (!NEYNAR_API_KEY) {
+  console.warn("[gladaitors] NEYNAR_API_KEY is not set — cast verification will always return unverified. Set it in Vercel env vars.");
+}
+
 // Check for casts in the last 10 minutes to give some buffer
 const LOOKBACK_SECONDS = 10 * 60;
 
@@ -19,10 +25,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (!NEYNAR_API_KEY) {
-      return NextResponse.json(
-        { error: "Neynar API key not configured" },
-        { status: 500 }
-      );
+      // Graceful degradation — don't 500, just tell the caller it couldn't be verified.
+      return NextResponse.json({ verified: false, reason: "API key not configured" });
     }
 
     // Fetch recent casts by this FID
@@ -36,11 +40,9 @@ export async function POST(req: NextRequest) {
 
     if (!res.ok) {
       const body = await res.text();
-      console.error("Neynar error:", res.status, body);
-      return NextResponse.json(
-        { error: "Neynar API error", details: body },
-        { status: 502 }
-      );
+      console.error("[gladaitors] Neynar error:", res.status, body);
+      // Return 200 with verified:false rather than propagating a 5xx to the client.
+      return NextResponse.json({ verified: false, reason: "Neynar API error" });
     }
 
     const data = await res.json();
@@ -63,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ verified: false });
   } catch (err) {
-    console.error("cast/verify error", err);
-    return NextResponse.json({ error: "internal error" }, { status: 500 });
+    console.error("[gladaitors] cast/verify error", err);
+    return NextResponse.json({ verified: false, reason: "internal error" });
   }
 }

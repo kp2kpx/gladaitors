@@ -58,7 +58,10 @@ type Step = "configure" | "approving" | "creating" | "done";
 
 export default function CreateMatch() {
   const router = useRouter();
-  const { address, isAuthed } = useFarcasterAuth();
+  const { address, fid, isAuthed } = useFarcasterAuth();
+
+  // Wallet-less Farcaster users cannot do paid fights (need address to sign txns)
+  const hasFidButNoWallet = fid !== null && !address && isAuthed;
 
   const [betAmountStr, setBetAmountStr] = useState("1");
   const [stats, setStats] = useState<GladiatorStats>(DEFAULT_STATS);
@@ -106,30 +109,38 @@ export default function CreateMatch() {
   const { isLoading: createConfirming, isSuccess: createSuccess, data: createReceipt } =
     useWaitForTransactionReceipt({ hash: createTxHash });
 
-  // When approve succeeds, proceed to createMatch
-  if (approveSuccess && step === "approving") {
-    setStep("creating");
-    refetchAllowance();
-    writeCreate({
-      address: PIT_ARENA_ADDRESS,
-      abi: PIT_ARENA_ABI,
-      functionName: "createMatch",
-      args: [betAmount],
-    });
-  }
-
-  // When create succeeds, extract match ID from logs
-  if (createSuccess && createReceipt && step === "creating") {
-    // Parse MatchCreated event: topic[1] is matchId (indexed)
-    const matchCreatedEvent = createReceipt.logs.find(
-      (log) => log.address.toLowerCase() === PIT_ARENA_ADDRESS.toLowerCase()
-    );
-    if (matchCreatedEvent && matchCreatedEvent.topics[1]) {
-      const matchId = BigInt(matchCreatedEvent.topics[1]).toString();
-      setCreatedMatchId(matchId);
-      setStep("done");
+  // When approve succeeds, proceed to createMatch.
+  // useEffect prevents double-firing in React StrictMode / concurrent renders.
+  useEffect(() => {
+    if (approveSuccess && step === "approving") {
+      setStep("creating");
+      refetchAllowance();
+      writeCreate({
+        address: PIT_ARENA_ADDRESS,
+        abi: PIT_ARENA_ABI,
+        functionName: "createMatch",
+        args: [betAmount],
+      });
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approveSuccess]);
+
+  // When create succeeds, extract match ID from logs.
+  // useEffect prevents double-firing in React StrictMode / concurrent renders.
+  useEffect(() => {
+    if (createSuccess && createReceipt && step === "creating") {
+      // Parse MatchCreated event: topic[1] is matchId (indexed)
+      const matchCreatedEvent = createReceipt.logs.find(
+        (log) => log.address.toLowerCase() === PIT_ARENA_ADDRESS.toLowerCase()
+      );
+      if (matchCreatedEvent && matchCreatedEvent.topics[1]) {
+        const matchId = BigInt(matchCreatedEvent.topics[1]).toString();
+        setCreatedMatchId(matchId);
+        setStep("done");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createSuccess, createReceipt]);
 
   async function handleEnterPit() {
     if (!address || !isAuthed) return;
@@ -198,6 +209,48 @@ export default function CreateMatch() {
     );
   }
 
+  // Wallet required for paid fights — show a clear prompt for FID-only users
+  if (hasFidButNoWallet) {
+    return (
+      <div className="arena-bg min-h-screen flex flex-col">
+        <Navbar><WalletButton /></Navbar>
+        <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
+          <div className="text-4xl mb-4">⚔️</div>
+          <h1 className="text-xl font-bold uppercase tracking-widest mb-3" style={{ color: "#b8860b" }}>
+            Wallet Required
+          </h1>
+          <p className="text-sm mb-6" style={{ color: "#8b6a40" }}>
+            A connected wallet is required for paid fights. Connect your wallet to place a bet and enter the pit.
+          </p>
+          <div
+            className="rounded-lg p-4 mb-6 text-sm"
+            style={{ background: "#1a1200", border: "1px solid #b8860b", color: "#d4a843" }}
+          >
+            Paid fights require a wallet to approve USDC and sign on-chain transactions.
+            Free fights and Fight Aitor work without a wallet.
+          </div>
+          <WalletButton />
+          <div className="mt-6 space-y-2">
+            <button className="btn-secondary w-full" onClick={() => router.push("/free-fight")}>
+              Play Free Fight Instead
+            </button>
+            <button className="btn-secondary w-full" onClick={() => router.push("/fight-aitor")}>
+              Fight Aitor (Bot) Instead
+            </button>
+            <button
+              className="text-xs transition-colors mt-2 block mx-auto"
+              style={{ color: "#9a7a50" }}
+              onClick={() => router.push("/")}
+            >
+              Back to Home
+            </button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="arena-bg min-h-screen flex flex-col">
       <Navbar><WalletButton /></Navbar>
@@ -211,8 +264,8 @@ export default function CreateMatch() {
         </p>
 
         {/* Bet amount */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-6">
-          <label className="block text-xs text-gray-400 uppercase tracking-widest mb-3">
+        <div className="rounded-lg p-5 mb-6" style={{ background: "#1a1200", border: "1px solid #4a3010" }}>
+          <label className="block text-xs uppercase tracking-widest mb-3" style={{ color: "#9a7a50" }}>
             Bet Amount (USDC)
           </label>
           <div className="flex items-center gap-3">
@@ -231,8 +284,8 @@ export default function CreateMatch() {
         </div>
 
         {/* Stat allocation */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-6">
-          <label className="block text-xs text-gray-400 uppercase tracking-widest mb-4">
+        <div className="rounded-lg p-5 mb-6" style={{ background: "#1a1200", border: "1px solid #4a3010" }}>
+          <label className="block text-xs uppercase tracking-widest mb-4" style={{ color: "#9a7a50" }}>
             Gladaitor Stats
           </label>
           <StatAllocator

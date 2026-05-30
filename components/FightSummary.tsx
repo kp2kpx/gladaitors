@@ -413,7 +413,7 @@ function GladCard({
       }}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs uppercase tracking-widest truncate max-w-[70px]" style={{ color: "#6b4c2a" }}>
+        <span className="text-xs uppercase tracking-widest truncate max-w-[120px]" style={{ color: "#6b4c2a" }}>
           {label}
         </span>
         {isWinner && <span className="text-xs font-bold shrink-0" style={{ color: "#fbbf24" }}>WINNER</span>}

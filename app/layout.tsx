@@ -27,6 +27,7 @@ export const metadata: Metadata = {
           type: "launch_miniapp",
           name: "GLADAITORS",
           url: "https://gladaitors.vercel.app",
+          splashImageUrl: "https://gladaitors.vercel.app/logo.png",
           splashBackgroundColor: "#f0e6d3",
         },
       },

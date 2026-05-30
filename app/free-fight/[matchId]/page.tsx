@@ -13,6 +13,7 @@ import type { GladiatorStats } from "@/lib/contract";
 import { TOTAL_POINTS } from "@/lib/contract";
 import type { FreeMatch } from "@/lib/kv";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
+import { resolveUsername } from "@/lib/resolveUsername";
 
 const DEFAULT_STATS: GladiatorStats = {
   strength: 5,
@@ -23,10 +24,11 @@ const DEFAULT_STATS: GladiatorStats = {
 };
 
 type ViewState =
-  | "loading"
-  | "configure"
-  | "joining"
-  | "waiting_p2"
+  | "loading"        // fetching match from KV
+  | "connecting"     // match loaded, waiting for wallet address to resolve
+  | "configure"      // p2 slot open — let the user build their gladiator
+  | "joining"        // join API call in-flight
+  | "waiting_p2"     // p1 waiting for opponent
   | "replay"
   | "result"
   | "error";
@@ -38,7 +40,10 @@ export default function FreeFightRoom({
 }) {
   const { matchId } = use(params);
   const router = useRouter();
-  const { address, fid, isAuthed } = useFarcasterAuth();
+  const { address, fid, isAuthed, isMiniAppReady } = useFarcasterAuth();
+
+  // Unified player identifier: wallet address if connected, fid: prefix otherwise
+  const playerId = address ?? (fid ? `fid:${fid}` : null);
 
   const [view, setView] = useState<ViewState>("loading");
   const [match, setMatch] = useState<FreeMatch | null>(null);
@@ -47,6 +52,8 @@ export default function FreeFightRoom({
   const [fightResult, setFightResult] = useState<FightResult | null>(null);
   const [sharedPoints, setSharedPoints] = useState(false);
   const [opponentUsername, setOpponentUsername] = useState<string | null>(null);
+  const [p1Label, setP1Label] = useState<string>("Player 1");
+  const [p2Label, setP2Label] = useState<string>("Player 2");
 
   const statsValid =
     Object.values(stats).reduce((a, b) => a + b, 0) === TOTAL_POINTS;
@@ -62,38 +69,86 @@ export default function FreeFightRoom({
     return m;
   }, [matchId]);
 
-  // Initial load
+  // ── Effect 1: Load the match immediately on mount — no auth gate ────────────
+  // We don't need to know who the viewer is to fetch match data. Auth resolves
+  // in parallel via Effect 2 below.
   useEffect(() => {
-    if (!address) return;
     loadMatch().then((m) => {
-      if (!m) return;
-      const me = address.toLowerCase();
-      if (m.player1 === me) {
-        setMyRole("p1");
-        if (m.state === "waiting") {
-          setView("waiting_p2");
-        } else if (m.state === "ready") {
-          runFight(m);
-        } else {
-          setView("result");
-        }
-      } else {
-        setMyRole(m.player2 === me ? "p2" : "spectator");
-        if (m.player2 === me && m.state !== "waiting") {
-          if (m.state === "ready") runFight(m);
-          else setView("result");
-        } else if (!m.player2) {
-          setView("configure");
-        } else {
-          if (m.state === "ready") runFight(m);
-          else setView("result");
-        }
-      }
+      if (!m) return; // error state already set inside loadMatch
+      // Match loaded but we don't know the viewer's address yet.
+      // Transition to "connecting" so Effect 2 can determine the role once
+      // address resolves. If address is already available (fast auth), Effect 2
+      // will run immediately after this render and set the real view.
+      setView("connecting");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address]);
+  }, [matchId]); // intentionally only on matchId — we want a single load on mount
 
-  // Poll while waiting for player2
+  // ── Effect 2: Determine role and view once BOTH match AND address are known ─
+  // Runs whenever match or address changes. Safe to run multiple times — it's
+  // idempotent as long as we're still in the "connecting" state (i.e. haven't
+  // yet transitioned to a real view). Once we leave "connecting", we don't
+  // re-run role detection so we don't clobber the join/replay flow.
+  useEffect(() => {
+    if (!match) return;           // match not loaded yet
+    if (view !== "connecting") return; // already resolved role, don't overwrite
+
+    // If MiniKit hasn't fired ready yet, neither address nor fid may be known yet.
+    // Stay in "connecting" until we have at least one identifier (address or fid).
+    // Once isMiniAppReady is true (or we're not in a mini app), whatever we have is final.
+    if (playerId === null && !isMiniAppReady) return; // still loading auth
+
+    resolveRoleAndView(match, playerId?.toLowerCase() ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match, address, fid, isMiniAppReady, view]);
+
+  async function resolveRoleAndView(m: FreeMatch, me: string | null) {
+    if (me && m.player1 === me) {
+      setMyRole("p1");
+      if (m.state === "waiting") {
+        setView("waiting_p2");
+      } else if (m.state === "ready") {
+        runFight(m);
+      } else {
+        await resolveLabels(m);
+        setView("result");
+      }
+    } else if (me && m.player2 === me) {
+      setMyRole("p2");
+      if (m.state === "ready") runFight(m);
+      else {
+        await resolveLabels(m);
+        setView("result");
+      }
+    } else if (!m.player2) {
+      // p2 slot is open — invite the viewer to join
+      setMyRole("spectator");
+      setView("configure");
+    } else {
+      // Both slots filled, viewer is a spectator
+      setMyRole("spectator");
+      if (m.state === "ready") runFight(m);
+      else {
+        await resolveLabels(m);
+        setView("result");
+      }
+    }
+  }
+
+  // Resolve display labels for both players — used when going straight to the
+  // result view (match already resolved on page load) without running through runFight.
+  async function resolveLabels(m: FreeMatch) {
+    const [l1, l2] = await Promise.all([
+      resolveUsername(m.player1, m.player1Fid ?? undefined),
+      resolveUsername(m.player2 ?? "???", m.player2Fid ?? undefined),
+    ]);
+    setP1Label(l1);
+    setP2Label(l2);
+    // Set opponentUsername so FightSummary taunts have a name to work with
+    setOpponentUsername(null); // will be derived from label in result render
+  }
+
+  // ── Poll while waiting for player2 ──────────────────────────────────────────
   useEffect(() => {
     if (view !== "waiting_p2") return;
     const interval = setInterval(async () => {
@@ -107,25 +162,25 @@ export default function FreeFightRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  function runFight(m: FreeMatch) {
+  async function runFight(m: FreeMatch) {
     if (!m.stats1 || !m.stats2) return;
     const result = simulateFight(m.stats1, m.stats2);
     setFightResult(result);
-    setView("replay");
 
-    // Resolve opponent's Farcaster username for taunts — fire and forget,
-    // never blocks the fight screen. Viewer's opponent is the other player.
-    const myAddr = address?.toLowerCase() ?? "";
+    // Resolve both player labels before showing the replay screen so names
+    // are present from the first frame — no flash of raw FIDs/addresses.
+    const [resolvedP1, resolvedP2] = await Promise.all([
+      resolveUsername(m.player1, m.player1Fid ?? undefined),
+      resolveUsername(m.player2 ?? "???", m.player2Fid ?? undefined),
+    ]);
+    setP1Label(resolvedP1);
+    setP2Label(resolvedP2);
+
+    // Derive opponent label for taunts — viewer's opponent is the other player.
+    const myAddr = playerId?.toLowerCase() ?? "";
     const iAmP1 = m.player1 === myAddr;
-    const opponentFid = iAmP1 ? m.player2Fid : m.player1Fid;
-    if (opponentFid) {
-      fetch(`/api/user/farcaster?fid=${opponentFid}`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (d?.username) setOpponentUsername(`@${d.username}`);
-        })
-        .catch(() => {});
-    }
+    const opponentLabel = iAmP1 ? resolvedP2 : resolvedP1;
+    setOpponentUsername(opponentLabel);
 
     const winner = result.winner === "p1" ? m.player1 : m.player2!;
     const loser = result.winner === "p1" ? m.player2! : m.player1;
@@ -150,16 +205,21 @@ export default function FreeFightRoom({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wallet: loser, action: "free_fight_completed", matchId }),
     }).catch(() => {});
+
+    // Transition to replay — must come AFTER all setState calls and BEFORE
+    // fire-and-forget fetches so the view doesn't stay stuck on joining/waiting.
+    setView("replay");
   }
 
   async function handleJoin() {
-    if (!address || !isAuthed || !statsValid) return;
+    // Auth is required to join — wallet or FID both accepted for free fights.
+    if (!playerId || !isAuthed || !statsValid) return;
     setView("joining");
 
     const res = await fetch("/api/free-match/join", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchId, wallet: address, fid, stats }),
+      body: JSON.stringify({ matchId, wallet: playerId, fid, stats }),
     });
 
     if (!res.ok) {
@@ -170,20 +230,26 @@ export default function FreeFightRoom({
     await fetch("/api/points/award", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet: address, action: "free_fight_cast_verified" }),
+      body: JSON.stringify({ wallet: playerId, action: "free_fight_joined" }),
     }).catch(() => {});
 
-    const m = await loadMatch();
-    if (m?.stats1) {
-      runFight({ ...m, stats2: stats });
+    const freshM = await loadMatch();
+    // KV may return stale data without stats1 if the creator's PATCH hasn't
+    // propagated yet. Fall back to the stats1 we already have in component
+    // state (loaded at mount) so the fight always starts.
+    const stats1 = freshM?.stats1 ?? match?.stats1;
+    if (stats1) {
+      runFight({ ...(freshM ?? match!), stats1, stats2: stats });
+    } else {
+      setView("error");
     }
   }
 
   async function handleShare() {
-    if (!address || sharedPoints || !fightResult || !match) return;
+    if (!playerId || sharedPoints || !fightResult || !match) return;
 
     const winner = fightResult.winner === "p1" ? match.player1 : match.player2;
-    const myWinner = address?.toLowerCase() === winner?.toLowerCase();
+    const myWinner = playerId?.toLowerCase() === winner?.toLowerCase();
     const shareText = encodeURIComponent(
       `My gladaitor just ${myWinner ? "WON" : "fought hard"} in GLADAITOR (FREE FIGHT) ⚔️ — gladaitors.vercel.app`
     );
@@ -196,7 +262,7 @@ export default function FreeFightRoom({
     await fetch("/api/points/award", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet: address, action: "share_fight_result", matchId }),
+      body: JSON.stringify({ wallet: playerId, action: "share_fight_result", matchId }),
     }).catch(() => {});
 
     setSharedPoints(true);
@@ -208,6 +274,16 @@ export default function FreeFightRoom({
     return (
       <div className="arena-bg min-h-screen flex items-center justify-center">
         <p className="text-gray-500 animate-pulse">Loading fight...</p>
+      </div>
+    );
+  }
+
+  // Match is loaded but player identity (address or FID) hasn't resolved yet.
+  // This is a transient state — typically resolves in <1s inside Warpcast.
+  if (view === "connecting") {
+    return (
+      <div className="arena-bg min-h-screen flex items-center justify-center">
+        <p className="text-gray-500 animate-pulse">Loading...</p>
       </div>
     );
   }
@@ -245,7 +321,7 @@ export default function FreeFightRoom({
           <button
             className="btn-primary w-full text-base py-4"
             onClick={handleJoin}
-            disabled={!isAuthed || !statsValid}
+            disabled={!isAuthed || !playerId || !statsValid}
           >
             Enter the Pit (FREE)
           </button>
@@ -316,8 +392,6 @@ export default function FreeFightRoom({
   }
 
   if (view === "replay" && fightResult && match) {
-    const p1Addr = match.player1;
-    const p2Addr = match.player2 ?? "???";
     return (
       <div className="arena-bg min-h-screen flex flex-col">
         <Header router={router} />
@@ -325,8 +399,8 @@ export default function FreeFightRoom({
           <div className="w-full max-w-sm">
             <FightReplay
               result={fightResult}
-              p1Label={`${p1Addr.slice(0, 6)}...${p1Addr.slice(-4)}`}
-              p2Label={`${p2Addr.slice(0, 6)}...${p2Addr.slice(-4)}`}
+              p1Label={p1Label}
+              p2Label={p2Label}
               viewerRole={myRole}
               onDone={() => setView("result")}
               onPlayAgain={() => router.push("/free-fight")}
@@ -342,19 +416,19 @@ export default function FreeFightRoom({
     const p1Stats = match.stats1!;
     const p2Stats = match.stats2!;
     const isP1Winner = fightResult.winner === "p1";
-    const myAddress = address?.toLowerCase() ?? "";
+    const myAddress = playerId?.toLowerCase() ?? "";
     const iAmP1 = match.player1 === myAddress;
     const iAmP2 = match.player2 === myAddress;
     const viewerRole = iAmP1 ? "p1" : iAmP2 ? "p2" : "spectator";
 
-    const p1Addr = match.player1;
-    const p2Addr = match.player2 ?? "???";
-
-    // Derive opponent name for taunts — prefer Farcaster username, fall back to "your opponent"
+    // Derive opponent name for taunts.
+    // opponentUsername is set during runFight. When the page lands directly on
+    // the result state (already-resolved match), fall back to the resolved label.
+    const opponentLabelFromResolved = iAmP1 ? p2Label : p1Label;
     const resolvedOpponentName =
       viewerRole === "spectator"
         ? "your opponent"
-        : opponentUsername ?? "your opponent";
+        : opponentUsername ?? opponentLabelFromResolved ?? "your opponent";
 
     return (
       <div className="arena-bg min-h-screen flex flex-col">
@@ -362,8 +436,8 @@ export default function FreeFightRoom({
         <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
           <FightSummary
             result={fightResult}
-            p1Label={`${p1Addr.slice(0, 6)}...${p1Addr.slice(-4)}`}
-            p2Label={`${p2Addr.slice(0, 6)}...${p2Addr.slice(-4)}`}
+            p1Label={p1Label}
+            p2Label={p2Label}
             p1Stats={p1Stats}
             p2Stats={p2Stats}
             isP1Winner={isP1Winner}

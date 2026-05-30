@@ -24,6 +24,7 @@ import {
 } from "@/lib/contract";
 import { simulateFight, FightResult } from "@/lib/fight-engine";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
+import { resolveUsername } from "@/lib/resolveUsername";
 
 export default function MatchPage({ params }: { params: Promise<{ matchId: string }> }) {
   const { matchId } = use(params);
@@ -37,6 +38,11 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
   const [replayResult, setReplayResult] = useState<FightResult | null>(null);
   const [showReplay, setShowReplay] = useState(false);
   const [replayDone, setReplayDone] = useState(false);
+  // Resolved player labels — paid fights have no on-chain FIDs, so these will
+  // be truncated wallet addresses. Kept as state so the pattern is consistent
+  // and trivially upgradeable if FIDs are added later.
+  const [p1Label, setP1Label] = useState<string>("");
+  const [p2Label, setP2Label] = useState<string>("");
 
   // Read match data - poll every 5s
   const { data: matchData, refetch: refetchMatch } = useReadContract({
@@ -75,7 +81,9 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
   const { isLoading: submitConfirming, isSuccess: submitSuccess } =
     useWaitForTransactionReceipt({ hash: submitTxHash });
 
-  if (submitSuccess) refetchMatch();
+  useEffect(() => {
+    if (submitSuccess) refetchMatch();
+  }, [submitSuccess, refetchMatch]);
 
   const { writeContract: writeResolve, data: resolveTxHash, isPending: resolvePending } =
     useWriteContract();
@@ -126,7 +134,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
     });
   }
 
-  function triggerReplay() {
+  async function triggerReplay() {
     if (!g1Data || !g2Data) return;
     const s1: GladiatorStats = {
       strength: g1Data[0], speed: g1Data[1], defense: g1Data[2],
@@ -137,6 +145,23 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
       intel: g2Data[3], luck: g2Data[4],
     };
     const result = simulateFight(s1, s2);
+
+    // Override the TS simulation winner with the authoritative on-chain winner.
+    // The TS engine uses Math.random() while Solidity uses prevrandao — they will
+    // diverge. The visual replay animation uses the TS result for hit-by-hit drama,
+    // but the outcome shown must match what the contract actually resolved.
+    const onChainWinnerIsP1 = winner.toLowerCase() === player1.toLowerCase();
+    result.winner = onChainWinnerIsP1 ? "p1" : "p2";
+
+    // Paid fights store wallet addresses only — no on-chain FIDs. The utility
+    // will produce truncated addresses. This keeps the label path consistent.
+    const [l1, l2] = await Promise.all([
+      resolveUsername(player1),
+      resolveUsername(player2 ?? ""),
+    ]);
+    setP1Label(l1);
+    setP2Label(l2);
+
     setReplayResult(result);
     setShowReplay(true);
   }
@@ -165,6 +190,10 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
 
   // Resolved + replay shown
   if (state === MatchState.Resolved && showReplay && replayResult && g1Data && g2Data) {
+    // Use resolved labels; fall back to truncated addresses while they load
+    const displayP1 = p1Label || `${player1.slice(0, 6)}...${player1.slice(-4)}`;
+    const displayP2 = p2Label || `${player2.slice(0, 6)}...${player2.slice(-4)}`;
+
     if (!replayDone) {
       return (
         <div className="arena-bg min-h-screen flex flex-col">
@@ -173,8 +202,8 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
             <div className="w-full max-w-sm">
               <FightReplay
                 result={replayResult}
-                p1Label={`${player1.slice(0, 6)}...${player1.slice(-4)}`}
-                p2Label={`${player2.slice(0, 6)}...${player2.slice(-4)}`}
+                p1Label={displayP1}
+                p2Label={displayP2}
                 viewerRole={isPlayer1 ? "p1" : isPlayer2 ? "p2" : "spectator"}
                 onDone={() => setReplayDone(true)}
                 onHome={() => router.push("/")}
@@ -197,8 +226,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
       intel: g2Data[3], luck: g2Data[4],
     };
 
-    // No FID stored for paid fights — just use a clean fallback
-    const opponentLabelPaid = "your opponent";
+    const opponentDisplayPaid = viewerRole === "p1" ? displayP2 : viewerRole === "p2" ? displayP1 : "your opponent";
 
     return (
       <div className="arena-bg min-h-screen flex flex-col">
@@ -206,13 +234,13 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
         <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
           <FightSummary
             result={replayResult}
-            p1Label={`${player1.slice(0, 6)}...${player1.slice(-4)}`}
-            p2Label={`${player2.slice(0, 6)}...${player2.slice(-4)}`}
+            p1Label={displayP1}
+            p2Label={displayP2}
             p1Stats={s1}
             p2Stats={s2}
             isP1Winner={onChainWinnerIsP1}
             viewerRole={viewerRole}
-            opponentName={viewerRole === "spectator" ? "your opponent" : opponentLabelPaid}
+            opponentName={opponentDisplayPaid}
             onShare={() => handleShare(winner.toLowerCase() === address?.toLowerCase())}
             shareLabel={sharedFight ? "Shared!" : winner.toLowerCase() === address?.toLowerCase() ? "Share Your Victory" : "Share Your Battle"}
             sharedAlready={sharedFight}
@@ -254,7 +282,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
 
         {/* WAITING FOR OPPONENT */}
         {state === MatchState.WaitingForOpponent && (
-          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center">
+          <div className="rounded-lg p-6 text-center" style={{ background: "#1a0a00", border: "1px solid #3a2010" }}>
             <div className="text-4xl mb-4">WAITING FOR OPPONENT</div>
             <p className="text-gray-400 text-sm mb-4">Share this fight ID with your opponent:</p>
             <div className="bg-black rounded px-6 py-3 text-2xl font-bold text-amber-400 font-mono mb-4 inline-block">
@@ -287,7 +315,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
             </div>
 
             {isParticipant && !myGladiatorSubmitted && (
-              <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+              <div className="rounded-lg p-5" style={{ background: "#1a1200", border: "1px solid #4a3010" }}>
                 <p className="text-sm text-gray-400 uppercase tracking-widest mb-4">
                   Submit Your Gladaitor
                 </p>
@@ -314,6 +342,12 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
                 Waiting for opponent to submit their gladaitor...
               </div>
             )}
+
+            {!isParticipant && (
+              <div className="text-center text-amber-600 text-sm py-4">
+                Waiting for both players to submit their gladaitors...
+              </div>
+            )}
           </div>
         )}
 
@@ -337,7 +371,7 @@ export default function MatchPage({ params }: { params: Promise<{ matchId: strin
               />
             </div>
 
-            <div className="bg-gray-900 border border-amber-900 rounded-lg p-6 text-center">
+            <div className="rounded-lg p-6 text-center" style={{ background: "#1a0a00", border: "1px solid #4a2010" }}>
               <div className="text-2xl font-bold text-amber-400 mb-2 animate-pulse">
                 GLADAITORS READY
               </div>
@@ -492,9 +526,12 @@ function PlayerCard({
 
   return (
     <div
-      className={`bg-gray-900 border rounded-lg p-4 ${
-        isWinner ? "border-amber-500 winner-glow" : "border-gray-800"
-      }`}
+      className="rounded-lg p-4"
+      style={{
+        background: "#1a1200",
+        border: isWinner ? "1px solid #b8860b" : "1px solid #4a3010",
+        boxShadow: isWinner ? "0 0 12px rgba(184,134,11,0.25)" : "none",
+      }}
     >
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-gray-500 uppercase tracking-widest">{label}</span>
@@ -514,7 +551,7 @@ function PlayerCard({
               <span className="text-xs text-amber-600 uppercase w-8 font-bold">
                 {stat.slice(0, 3).toUpperCase()}
               </span>
-              <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "#2a1a00" }}>
                 <div
                   className="h-full rounded-full"
                   style={{

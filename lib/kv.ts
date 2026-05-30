@@ -85,6 +85,21 @@ export async function getPublicFreeMatches(): Promise<FreeMatch[]> {
  * Free matches have a 1h TTL and volume is low, so full scan is acceptable.
  */
 export async function getFreeMatchesByFid(fid: number): Promise<FreeMatch[]> {
+  return getFreeMatchesByIdentifier({ fid });
+}
+
+/**
+ * Return free matches involving the given FID and/or wallet address.
+ * Wallet-only users (no FID) need the wallet fallback to see their history.
+ */
+export async function getFreeMatchesByIdentifier({
+  fid,
+  wallet,
+}: {
+  fid?: number;
+  wallet?: string;
+}): Promise<FreeMatch[]> {
+  const walletLower = wallet?.toLowerCase();
   const results: FreeMatch[] = [];
   let cursor = 0;
   do {
@@ -99,10 +114,13 @@ export async function getFreeMatchesByFid(fid: number): Promise<FreeMatch[]> {
         keys.map((k) => kv.get<FreeMatch>(k))
       );
       for (const m of values) {
-        if (
-          m &&
-          (m.player1Fid === fid || m.player2Fid === fid)
-        ) {
+        if (!m) continue;
+        const matchesFid = fid != null && (m.player1Fid === fid || m.player2Fid === fid);
+        const matchesWallet =
+          walletLower != null &&
+          (m.player1?.toLowerCase() === walletLower ||
+            m.player2?.toLowerCase() === walletLower);
+        if (matchesFid || matchesWallet) {
           results.push(m);
         }
       }

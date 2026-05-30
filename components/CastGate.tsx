@@ -51,7 +51,7 @@ export default function CastGate({ fid, onVerified }: Props) {
 
   return (
     <div className="arena-bg min-h-screen flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+      <div className="max-w-md w-full rounded-xl p-8 text-center" style={{ background: "#1a1200", border: "1px solid #4a3010" }}>
         <div className="text-5xl mb-4">🗡️</div>
         <h2 className="text-xl font-bold uppercase tracking-widest text-white mb-2">
           Cast to Unlock Free Fight
@@ -61,8 +61,8 @@ export default function CastGate({ fid, onVerified }: Props) {
           to get your free entry ticket.
         </p>
 
-        <div className="bg-black border border-gray-700 rounded-lg p-4 mb-6 text-left">
-          <p className="text-gray-300 text-sm font-mono leading-relaxed">
+        <div className="rounded-lg p-4 mb-6 text-left" style={{ background: "#e8dcc8", border: "1px solid #c4a882" }}>
+          <p className="text-sm font-mono leading-relaxed" style={{ color: "#4a3010" }}>
             {CAST_TEXT}
           </p>
         </div>
@@ -80,6 +80,12 @@ export default function CastGate({ fid, onVerified }: Props) {
             </p>
             <button className="btn-primary w-full" onClick={handleVerify}>
               I Casted — Verify Now
+            </button>
+            <button
+              className="btn-secondary w-full"
+              onClick={() => setStatus("idle")}
+            >
+              &larr; Back
             </button>
           </div>
         )}

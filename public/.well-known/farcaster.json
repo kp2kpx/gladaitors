@@ -1,0 +1,17 @@
+{
+  "accountAssociation": {
+    "header": "PLACEHOLDER_REPLACE_WITH_REAL_VALUE",
+    "payload": "PLACEHOLDER_REPLACE_WITH_REAL_VALUE",
+    "signature": "PLACEHOLDER_REPLACE_WITH_REAL_VALUE"
+  },
+  "frame": {
+    "version": "next",
+    "name": "GLADAITOR",
+    "iconUrl": "https://gladaitors.vercel.app/logo.png",
+    "homeUrl": "https://gladaitors.vercel.app",
+    "imageUrl": "https://gladaitors.vercel.app/api/og",
+    "buttonTitle": "Enter the Pit",
+    "splashImageUrl": "https://gladaitors.vercel.app/logo.png",
+    "splashBackgroundColor": "#1a0a00"
+  }
+}

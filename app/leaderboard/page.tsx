@@ -14,9 +14,13 @@ interface PointRecord {
 }
 
 function getNextDrop(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 7);
-  return d.toLocaleDateString("en-US", {
+  const now = new Date();
+  // Next Monday at midnight UTC — fixed weekly anchor for the leaderboard reset.
+  const daysUntilMonday = (8 - now.getDay()) % 7 || 7;
+  const next = new Date(now);
+  next.setDate(now.getDate() + daysUntilMonday);
+  next.setHours(0, 0, 0, 0);
+  return next.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",

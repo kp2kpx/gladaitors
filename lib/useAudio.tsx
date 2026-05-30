@@ -218,29 +218,48 @@ export function useAudio(config: AudioConfig = {}): UseAudioReturn {
   }, [isMuted]);
 
   // ── Init audio elements ──────────────────────────────────────────────────
+  //
+  // AUDIO FILES MISSING: Drop MP3s into /public/audio/ to enable file-based
+  // playback. Required files:
+  //   /public/audio/music.mp3      — background loop
+  //   /public/audio/hit.mp3        — sword hit SFX
+  //   /public/audio/crit.mp3       — critical hit charge-up SFX
+  //   /public/audio/death.mp3      — death SFX
+  //   /public/audio/victory.mp3    — victory fanfare SFX
+  //   /public/audio/round_start.mp3 — round start bell SFX
+  //
+  // Until those files exist, the synthetic Web Audio fallback is used for SFX
+  // and music is silent. No 404 errors are logged — audio failure is silent.
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Background music element
-    const music = new Audio(musicSrc);
+    // Background music element — errors suppressed; file may not exist yet.
+    const music = new Audio();
     music.loop   = true;
     music.volume = 0; // starts at 0, fades in after unlock
-    music.preload = "auto";
-    // Don't auto-play — wait for user interaction
+    music.preload = "none"; // don't auto-request until we know file exists
+
+    // Silence 404 errors from the console — audio files are optional.
+    music.addEventListener("error", () => {
+      // File not found or format unsupported — synthetic fallback will be used.
+      // musicReady stays false.
+    }, { once: true });
+    music.addEventListener("canplaythrough", () => setMusicReady(true), { once: true });
+
+    // Probe the music file — set src after attaching listeners.
+    // If the file doesn't exist, the error handler above silently catches it.
+    music.src = musicSrc;
     musicRef.current = music;
 
-    // Probe load to know if the file actually exists
-    music.addEventListener("canplaythrough", () => setMusicReady(true), { once: true });
-    // If file 404s or errors, musicReady stays false — synthetic fallback used for SFX
-    music.load();
-
-    // Pre-load SFX
+    // Pre-load SFX — suppress all 404 errors; synthetic tones serve as fallback.
     (Object.keys(sfxSrcs) as SfxName[]).forEach((name) => {
-      const audio = new Audio(sfxSrcs[name]);
-      audio.preload = "auto";
+      const audio = new Audio();
+      audio.preload = "none";
       audio.volume  = SFX_VOLUME;
-      audio.load();
+      // Silence 404 / format errors — playSfx() falls back to synthetic on error.
+      audio.addEventListener("error", () => {}, { once: true });
+      audio.src = sfxSrcs[name]!;
       sfxRef.current[name] = audio;
     });
 

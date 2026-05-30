@@ -372,31 +372,6 @@ function SpriteAvatar({
     transform = `translateX(${isP2 ? -translateX : translateX}px) scaleX(${isP2 ? -1 : 1})`;
   }
 
-  // Idle: subtle breathing animation via CSS class
-  // Attack: brightness pulse on sword arm (handled via filter)
-  // Death: sword glow fades — handled via filter brightness
-
-  const idleAnim: React.CSSProperties =
-    pose === "idle"
-      ? { animation: "gladBreath 1.5s ease-in-out infinite" }
-      : {};
-
-  const deathAnim: React.CSSProperties =
-    pose === "death"
-      ? { animation: "gladDeath 600ms ease-out forwards" }
-      : {};
-
-  const shakeStyle: React.CSSProperties = shake
-    ? { animation: "gladShake 150ms ease-in-out" }
-    : {};
-
-  const critGlowStyle: React.CSSProperties = critGlow
-    ? { animation: "gladCritGlow 200ms ease-out" }
-    : {};
-
-  // Pick dominant animation (priority: shake > critGlow > death > idle)
-  const animStyle = shake ? shakeStyle : critGlow ? critGlowStyle : pose === "death" ? deathAnim : idleAnim;
-
   // Filter: flash (hit flash), attack brightness on attack pose
   let filterVal: string | undefined;
   if (flash) {
@@ -411,6 +386,18 @@ function SpriteAvatar({
   // Impact glow: radial glow at sword arm when taking a hit
   const showImpactGlow = pose === "hit" && flash;
 
+  // Breathing and death animations must live on an INNER div, not the outer div.
+  // The outer div holds transform (scaleX mirror + lunge) and transition.
+  // If the animation and the mirror transform share the same element, CSS keyframes
+  // overwrite the inline transform:scaleX(-1) during each frame, un-mirroring P2.
+  const innerAnimStyle: React.CSSProperties = (() => {
+    if (shake) return { animation: "gladShake 150ms ease-in-out" };
+    if (critGlow) return { animation: "gladCritGlow 200ms ease-out" };
+    if (pose === "death") return { animation: "gladDeath 600ms ease-out forwards" };
+    if (pose === "idle") return { animation: "gladBreath 1.5s ease-in-out infinite" };
+    return {};
+  })();
+
   return (
     <div
       style={{
@@ -418,60 +405,68 @@ function SpriteAvatar({
         position: "relative",
         // Center-align for the arena floor
         verticalAlign: "bottom",
-        opacity: (!pose.startsWith("death") && dim) ? 0.35 : 1,
-        filter: filterVal,
-        transition: flash ? "filter 0ms" : "filter 200ms ease-out",
+        // Outer div owns: mirror transform + lunge/knockback movement + transition.
+        // Animations are on the inner div so they don't clobber scaleX(-1) for P2.
         transform,
         transformOrigin: "bottom center",
-        ...animStyle,
+        transition: "transform 80ms ease-out",
       }}
     >
-      <Image
-        src={src}
-        alt={`${color} gladaitor ${pose}`}
-        width={Math.round(H * (848 / 1216))}
-        height={H}
+      {/* Inner div owns: breathing/death/shake/critGlow animations + opacity + filter */}
+      <div
         style={{
-          display: "block",
-          // Idle breathing: very subtle rotate sway (in CSS keyframe)
-          imageRendering: "auto",
+          opacity: (!pose.startsWith("death") && dim) ? 0.35 : 1,
+          filter: filterVal,
+          transition: flash ? "filter 0ms" : "filter 200ms ease-out",
+          ...innerAnimStyle,
         }}
-        priority
-        unoptimized
-      />
-      {/* Impact glow ring on hit */}
-      {showImpactGlow && (
-        <div
+      >
+        <Image
+          src={src}
+          alt={`${color} gladaitor ${pose}`}
+          width={Math.round(H * (848 / 1216))}
+          height={H}
           style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "50%",
-            background: "radial-gradient(circle at center, rgba(255,100,100,0.35) 0%, transparent 70%)",
-            pointerEvents: "none",
-            animation: "gladImpactGlow 300ms ease-out forwards",
+            display: "block",
+            imageRendering: "auto",
           }}
+          priority
+          unoptimized
         />
-      )}
-      {critGlow && (
-        <div
-          style={{
-            position: "absolute",
-            top: "-22px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            whiteSpace: "nowrap",
-            fontSize: "10px",
-            fontWeight: 900,
-            color: "#fbbf24",
-            textShadow: "0 0 8px rgba(251,191,36,0.9)",
-            letterSpacing: "0.05em",
-            pointerEvents: "none",
-            animation: "gladCritLabel 200ms ease-out forwards",
-          }}
-        >
-          CRITICAL!
-        </div>
-      )}
+        {/* Impact glow ring on hit */}
+        {showImpactGlow && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: "50%",
+              background: "radial-gradient(circle at center, rgba(255,100,100,0.35) 0%, transparent 70%)",
+              pointerEvents: "none",
+              animation: "gladImpactGlow 300ms ease-out forwards",
+            }}
+          />
+        )}
+        {critGlow && (
+          <div
+            style={{
+              position: "absolute",
+              top: "-22px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              whiteSpace: "nowrap",
+              fontSize: "10px",
+              fontWeight: 900,
+              color: "#fbbf24",
+              textShadow: "0 0 8px rgba(251,191,36,0.9)",
+              letterSpacing: "0.05em",
+              pointerEvents: "none",
+              animation: "gladCritLabel 200ms ease-out forwards",
+            }}
+          >
+            CRITICAL!
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -968,6 +963,87 @@ export default function FightReplay({
 
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  // Inject animation keyframes into document.head exactly once.
+  // Previously these lived inside the JSX <style> block and were re-injected on
+  // every re-render during the fight animation loop, causing layout jank.
+  useEffect(() => {
+    const STYLE_ID = "gladaitor-keyframes";
+    if (typeof document === "undefined" || document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+      @keyframes gladShake {
+        0%   { transform: translateX(0); }
+        20%  { transform: translateX(-6px); }
+        40%  { transform: translateX(6px); }
+        60%  { transform: translateX(-5px); }
+        80%  { transform: translateX(5px); }
+        100% { transform: translateX(0); }
+      }
+      @keyframes gladDmgFloat {
+        0%   { opacity: 1; }
+        70%  { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      @keyframes gladCritGlow {
+        0%   { box-shadow: 0 0 0px 0px rgba(255,255,255,0); filter: brightness(1); }
+        30%  { box-shadow: 0 0 8px 4px rgba(255,255,255,0.6), 0 0 20px 8px rgba(200,220,255,0.3); filter: brightness(1.4); }
+        70%  { box-shadow: 0 0 20px 10px rgba(255,255,255,0.9), 0 0 40px 16px rgba(180,210,255,0.5); filter: brightness(2) saturate(0.5); }
+        100% { box-shadow: 0 0 32px 16px rgba(255,255,255,0), 0 0 60px 24px rgba(180,210,255,0); filter: brightness(1); }
+      }
+      @keyframes gladCritLabel {
+        0%   { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.8); }
+        30%  { opacity: 1; transform: translateX(-50%) translateY(0px) scale(1.1); }
+        100% { opacity: 1; transform: translateX(-50%) translateY(0px) scale(1); }
+      }
+      @keyframes gladProjRight {
+        0%   { transform: translateY(-50%) translateX(0px); opacity: 1; }
+        90%  { opacity: 1; }
+        100% { transform: translateY(-50%) translateX(calc(var(--proj-travel, 260px))); opacity: 0; }
+      }
+      @keyframes gladProjLeft {
+        0%   { transform: translateY(-50%) translateX(0px); opacity: 1; }
+        90%  { opacity: 1; }
+        100% { transform: translateY(-50%) translateX(calc(-1 * var(--proj-travel, 260px))); opacity: 0; }
+      }
+      @keyframes gladStarburstSpin {
+        0%   { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes gladFallLeft {
+        0%   { transform: translate(0,0) rotate(0deg); opacity: 1; }
+        15%  { transform: translate(-10px,-8px) rotate(-10deg); opacity: 0.9; }
+        55%  { transform: translate(-22px,10px) rotate(-22deg); opacity: 0.55; }
+        100% { transform: translate(-30px,20px) rotate(-30deg); opacity: 0.2; }
+      }
+      @keyframes gladFallRight {
+        0%   { transform: translate(0,0) rotate(0deg); opacity: 1; }
+        15%  { transform: translate(10px,-8px) rotate(10deg); opacity: 0.9; }
+        55%  { transform: translate(22px,10px) rotate(22deg); opacity: 0.55; }
+        100% { transform: translate(30px,20px) rotate(30deg); opacity: 0.2; }
+      }
+      @keyframes gladOverlayIn {
+        0%   { opacity: 0; transform: scale(0.96); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes gladBreath {
+        0%, 100% { transform: scaleY(1) rotate(0deg); }
+        25%       { transform: scaleY(1.02) rotate(0.3deg); }
+        75%       { transform: scaleY(0.99) rotate(-0.3deg); }
+      }
+      @keyframes gladDeath {
+        0%   { opacity: 1; transform: translateY(0px); filter: brightness(1); }
+        30%  { opacity: 0.85; transform: translateY(8px); filter: brightness(0.8); }
+        100% { opacity: 0.6; transform: translateY(20px); filter: brightness(0.3); }
+      }
+      @keyframes gladImpactGlow {
+        0%   { opacity: 1; }
+        100% { opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
   function clearAll() {
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
@@ -1307,81 +1383,6 @@ export default function FightReplay({
 
   return (
     <div className="relative w-full max-w-sm mx-auto select-none">
-      {/* Animation keyframes — injected once */}
-      <style>{`
-        @keyframes gladShake {
-          0%   { transform: translateX(0); }
-          20%  { transform: translateX(-6px); }
-          40%  { transform: translateX(6px); }
-          60%  { transform: translateX(-5px); }
-          80%  { transform: translateX(5px); }
-          100% { transform: translateX(0); }
-        }
-        @keyframes gladDmgFloat {
-          0%   { opacity: 1; }
-          70%  { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        @keyframes gladCritGlow {
-          /* White energy charge-up — radiates outward from attacker, 200ms */
-          0%   { box-shadow: 0 0 0px 0px rgba(255,255,255,0); filter: brightness(1); }
-          30%  { box-shadow: 0 0 8px 4px rgba(255,255,255,0.6), 0 0 20px 8px rgba(200,220,255,0.3); filter: brightness(1.4); }
-          70%  { box-shadow: 0 0 20px 10px rgba(255,255,255,0.9), 0 0 40px 16px rgba(180,210,255,0.5); filter: brightness(2) saturate(0.5); }
-          100% { box-shadow: 0 0 32px 16px rgba(255,255,255,0), 0 0 60px 24px rgba(180,210,255,0); filter: brightness(1); }
-        }
-        @keyframes gladCritLabel {
-          0%   { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.8); }
-          30%  { opacity: 1; transform: translateX(-50%) translateY(0px) scale(1.1); }
-          100% { opacity: 1; transform: translateX(-50%) translateY(0px) scale(1); }
-        }
-        @keyframes gladProjRight {
-          0%   { transform: translateY(-50%) translateX(0px); opacity: 1; }
-          90%  { opacity: 1; }
-          100% { transform: translateY(-50%) translateX(calc(var(--proj-travel, 260px))); opacity: 0; }
-        }
-        @keyframes gladProjLeft {
-          0%   { transform: translateY(-50%) translateX(0px); opacity: 1; }
-          90%  { opacity: 1; }
-          100% { transform: translateY(-50%) translateX(calc(-1 * var(--proj-travel, 260px))); opacity: 0; }
-        }
-        @keyframes gladStarburstSpin {
-          /* Starburst wrapper slowly rotates during crit flight */
-          0%   { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        @keyframes gladFallLeft {
-          0%   { transform: translate(0,0) rotate(0deg); opacity: 1; }
-          15%  { transform: translate(-10px,-8px) rotate(-10deg); opacity: 0.9; }
-          55%  { transform: translate(-22px,10px) rotate(-22deg); opacity: 0.55; }
-          100% { transform: translate(-30px,20px) rotate(-30deg); opacity: 0.2; }
-        }
-        @keyframes gladFallRight {
-          0%   { transform: translate(0,0) rotate(0deg); opacity: 1; }
-          15%  { transform: translate(10px,-8px) rotate(10deg); opacity: 0.9; }
-          55%  { transform: translate(22px,10px) rotate(22deg); opacity: 0.55; }
-          100% { transform: translate(30px,20px) rotate(30deg); opacity: 0.2; }
-        }
-        @keyframes gladOverlayIn {
-          0%   { opacity: 0; transform: scale(0.96); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-        /* Sprite-based character animations */
-        @keyframes gladBreath {
-          0%, 100% { transform: scaleY(1) rotate(0deg); }
-          25%       { transform: scaleY(1.02) rotate(0.3deg); }
-          75%       { transform: scaleY(0.99) rotate(-0.3deg); }
-        }
-        @keyframes gladDeath {
-          0%   { opacity: 1; transform: translateY(0px); filter: brightness(1); }
-          30%  { opacity: 0.85; transform: translateY(8px); filter: brightness(0.8); }
-          100% { opacity: 0.6; transform: translateY(20px); filter: brightness(0.3); }
-        }
-        @keyframes gladImpactGlow {
-          0%   { opacity: 1; }
-          100% { opacity: 0; }
-        }
-      `}</style>
-
       {/* Skip button */}
       {!finished && (
         <button

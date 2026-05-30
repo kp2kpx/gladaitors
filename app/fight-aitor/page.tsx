@@ -60,7 +60,10 @@ type Step = "configure" | "replay" | "result";
 
 export default function FightAitor() {
   const router = useRouter();
-  const { address, isAuthed } = useFarcasterAuth();
+  const { address, fid, isAuthed } = useFarcasterAuth();
+
+  // Unified identifier for points tracking: wallet address if connected, fid: prefix otherwise
+  const playerId = address ?? (fid ? `fid:${fid}` : null);
 
   const [step, setStep] = useState<Step>("configure");
   const [playerStats, setPlayerStats] = useState<GladiatorStats>(DEFAULT_PLAYER_STATS);
@@ -71,37 +74,38 @@ export default function FightAitor() {
   const statsValid =
     Object.values(playerStats).reduce((a, b) => a + b, 0) === TOTAL_POINTS;
 
-  // Load last-used stats from localStorage when wallet is available
+  // Load last-used stats from localStorage when any identifier is available
   useEffect(() => {
-    if (!address) return;
-    const saved = loadSavedStats(address);
+    if (!playerId) return;
+    const saved = loadSavedStats(playerId);
     if (saved) setPlayerStats(saved);
-  }, [address]);
+  }, [playerId]);
 
   function startFight() {
     if (!statsValid) return;
 
     // Persist this build so the allocator pre-fills next time
-    if (address) saveStats(address, playerStats);
+    if (playerId) saveStats(playerId, playerStats);
 
     // Compute fight eagerly before entering replay
     const result = simulateFight(playerStats, AITOR_STATS);
     setFightResult(result);
     setStep("replay");
 
-    if (address && !pointsAwarded) {
+    // Award points keyed to playerId (wallet address or fid: string)
+    if (playerId && !pointsAwarded) {
       setPointsAwarded(true);
       fetch("/api/points/award", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: address, action: "bot_fight_completed" }),
+        body: JSON.stringify({ wallet: playerId, action: "bot_fight_completed" }),
       }).catch(() => {});
 
       if (result.winner === "p1") {
         fetch("/api/points/award", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ wallet: address, action: "bot_fight_won" }),
+          body: JSON.stringify({ wallet: playerId, action: "bot_fight_won" }),
         }).catch(() => {});
       }
     }
@@ -120,13 +124,17 @@ export default function FightAitor() {
       "noopener,noreferrer"
     );
 
-    if (address) {
-      const shareMatchId = `aitor-${address.slice(2, 10)}-${Date.now()}`;
+    if (playerId) {
+      // Build a stable match ID for dedup — use playerId slug + timestamp
+      const playerSlug = playerId.startsWith("fid:")
+        ? playerId.slice(4)
+        : playerId.slice(2, 10);
+      const shareMatchId = `aitor-${playerSlug}-${Date.now()}`;
       await fetch("/api/points/award", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          wallet: address,
+          wallet: playerId,
           action: "share_fight_result",
           matchId: shareMatchId,
         }),
@@ -250,6 +258,7 @@ export default function FightAitor() {
             />
           </div>
         </main>
+        <Footer />
       </div>
     );
   }

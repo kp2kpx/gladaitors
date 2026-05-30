@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   useWriteContract,
@@ -24,11 +24,11 @@ import {
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
 
 const DEFAULT_STATS: GladiatorStats = {
-  strength: 4,
-  speed: 4,
-  defense: 4,
-  intel: 4,
-  luck: 4,
+  strength: 5,
+  speed: 5,
+  defense: 5,
+  intel: 5,
+  luck: 5,
 };
 
 type Step = "configure" | "approving" | "joining" | "submitting" | "done";
@@ -36,7 +36,10 @@ type Step = "configure" | "approving" | "joining" | "submitting" | "done";
 export default function JoinMatch({ params }: { params: Promise<{ matchId: string }> }) {
   const { matchId } = use(params);
   const router = useRouter();
-  const { address, isAuthed } = useFarcasterAuth();
+  const { address, fid, isAuthed } = useFarcasterAuth();
+
+  // Wallet-less Farcaster users cannot do paid fights
+  const hasFidButNoWallet = fid !== null && !address && isAuthed;
 
   const [stats, setStats] = useState<GladiatorStats>(DEFAULT_STATS);
   const [step, setStep] = useState<Step>("configure");
@@ -80,36 +83,87 @@ export default function JoinMatch({ params }: { params: Promise<{ matchId: strin
   const { isLoading: submitConfirming, isSuccess: submitSuccess } =
     useWaitForTransactionReceipt({ hash: submitTxHash });
 
-  // State machine
-  if (approveSuccess && step === "approving") {
-    setStep("joining");
-    refetchAllowance();
-    writeJoin({
-      address: PIT_ARENA_ADDRESS,
-      abi: PIT_ARENA_ABI,
-      functionName: "joinMatch",
-      args: [matchIdBig],
-    });
-  }
+  // State machine — useEffect prevents double-firing in React StrictMode / concurrent renders.
+  useEffect(() => {
+    if (approveSuccess && step === "approving") {
+      setStep("joining");
+      refetchAllowance();
+      writeJoin({
+        address: PIT_ARENA_ADDRESS,
+        abi: PIT_ARENA_ABI,
+        functionName: "joinMatch",
+        args: [matchIdBig],
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approveSuccess]);
 
-  if (joinSuccess && step === "joining") {
-    setStep("submitting");
-    writeSubmit({
-      address: PIT_ARENA_ADDRESS,
-      abi: PIT_ARENA_ABI,
-      functionName: "submitGladiator",
-      args: [matchIdBig, [stats.strength, stats.speed, stats.defense, stats.intel, stats.luck]],
-    });
-  }
+  useEffect(() => {
+    if (joinSuccess && step === "joining") {
+      setStep("submitting");
+      writeSubmit({
+        address: PIT_ARENA_ADDRESS,
+        abi: PIT_ARENA_ABI,
+        functionName: "submitGladiator",
+        args: [matchIdBig, [stats.strength, stats.speed, stats.defense, stats.intel, stats.luck]],
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joinSuccess]);
 
-  if (submitSuccess && step === "submitting") {
-    setStep("done");
-  }
+  useEffect(() => {
+    if (submitSuccess && step === "submitting") {
+      setStep("done");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitSuccess]);
 
   if (!matchData) {
     return (
       <div className="arena-bg min-h-screen flex items-center justify-center">
         <p className="text-gray-500">Loading fight...</p>
+      </div>
+    );
+  }
+
+  // Wallet-less Farcaster users cannot join paid fights — show a clear prompt
+  if (hasFidButNoWallet) {
+    return (
+      <div className="arena-bg min-h-screen flex flex-col">
+        <Navbar><WalletButton /></Navbar>
+        <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
+          <div className="text-4xl mb-4">⚔️</div>
+          <h1 className="text-xl font-bold uppercase tracking-widest mb-3" style={{ color: "#b8860b" }}>
+            Wallet Required
+          </h1>
+          <p className="text-sm mb-6" style={{ color: "#8b6a40" }}>
+            A connected wallet is required for paid fights. Connect your wallet to place a bet and join this fight.
+          </p>
+          <div
+            className="rounded-lg p-4 mb-6 text-sm"
+            style={{ background: "#1a1200", border: "1px solid #b8860b", color: "#d4a843" }}
+          >
+            Paid fights require a wallet to approve USDC and sign on-chain transactions.
+            Free fights and Fight Aitor work without a wallet.
+          </div>
+          <WalletButton />
+          <div className="mt-6 space-y-2">
+            <button className="btn-secondary w-full" onClick={() => router.push("/free-fight")}>
+              Play Free Fight Instead
+            </button>
+            <button className="btn-secondary w-full" onClick={() => router.push("/fight-aitor")}>
+              Fight Aitor (Bot) Instead
+            </button>
+            <button
+              className="text-xs transition-colors mt-2 block mx-auto"
+              style={{ color: "#9a7a50" }}
+              onClick={() => router.push("/")}
+            >
+              Back to Home
+            </button>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }
@@ -211,7 +265,7 @@ export default function JoinMatch({ params }: { params: Promise<{ matchId: strin
         </p>
 
         {/* Bet display */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-6 flex items-center justify-between">
+        <div className="rounded-lg p-4 mb-6 flex items-center justify-between" style={{ background: "#1a1200", border: "1px solid #4a3010" }}>
           <span className="text-sm text-gray-400 uppercase tracking-widest">Your stake</span>
           <span className="text-2xl font-bold text-amber-400">
             {formatUnits(betAmount, 6)} USDC
@@ -219,8 +273,8 @@ export default function JoinMatch({ params }: { params: Promise<{ matchId: strin
         </div>
 
         {/* Stat allocation */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-5 mb-6">
-          <label className="block text-xs text-gray-400 uppercase tracking-widest mb-4">
+        <div className="rounded-lg p-5 mb-6" style={{ background: "#1a1200", border: "1px solid #4a3010" }}>
+          <label className="block text-xs uppercase tracking-widest mb-4" style={{ color: "#9a7a50" }}>
             Build Your Gladaitor
           </label>
           <StatAllocator stats={stats} onChange={setStats} disabled={isBusy} />

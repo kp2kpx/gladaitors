@@ -22,7 +22,8 @@ export default function MuteButton() {
       aria-label={isMuted ? "Unmute audio" : "Mute audio"}
       style={{
         position: "fixed",
-        top: "12px",
+        // Offset below Farcaster's native header chrome (~48px) to avoid overlap.
+        top: "56px",
         right: "12px",
         zIndex: 9999,
         background: "rgba(240,230,211,0.85)",

@@ -73,7 +73,7 @@ function formatDate(ts: number) {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { isAuthed, address, fid, username, pfpUrl } = useFarcasterAuth();
+  const { isAuthed, isInMiniApp, logout, address, fid, username, pfpUrl } = useFarcasterAuth();
 
   const [tab, setTab] = useState<MatchTab>("matches");
   const [balances, setBalances] = useState<Balances | null>(null);
@@ -280,10 +280,12 @@ export default function ProfilePage() {
 
   // --- Load free match history ---
   const loadFreeMatches = useCallback(async () => {
-    if (!fid) return;
+    if (!fid && !address) return;
     setLoadingFree(true);
     try {
-      const res = await fetch(`/api/profile/free-matches?fid=${fid}`);
+      const res = await fetch(
+        `/api/profile/free-matches?fid=${fid ?? ""}&wallet=${address ?? ""}`
+      );
       const data = await res.json();
       setFreeMatches(data.matches ?? []);
     } catch (e) {
@@ -291,7 +293,7 @@ export default function ProfilePage() {
     } finally {
       setLoadingFree(false);
     }
-  }, [fid]);
+  }, [fid, address]);
 
   useEffect(() => {
     if (isAuthed && address) {
@@ -301,10 +303,16 @@ export default function ProfilePage() {
   }, [isAuthed, address, loadBalances, loadOnChainMatches]);
 
   useEffect(() => {
-    if (isAuthed && fid) {
+    if (isAuthed && (fid || address)) {
       loadFreeMatches();
     }
-  }, [isAuthed, fid, loadFreeMatches]);
+  }, [isAuthed, fid, address, loadFreeMatches]);
+
+  // --- Logout (web only — hidden inside Mini App) ---
+  function handleLogout() {
+    logout();
+    router.push("/");
+  }
 
   // --- Claim all winnings (house-sponsored via /api/claim) ---
   async function handleClaim() {
@@ -683,8 +691,14 @@ export default function ProfilePage() {
                     const myWallet = address?.toLowerCase();
 
                     let freeResult: "WIN" | "LOSS" | "PENDING" = "PENDING";
-                    if (m.state === "resolved" && m.winner && myWallet) {
-                      freeResult = m.winner === myWallet ? "WIN" : "LOSS";
+                    if (m.state === "resolved" && m.winner) {
+                      // m.winner may be a wallet address or a "fid:XXXXX" string
+                      // for wallet-less players. Check both identifiers.
+                      const myIdentifiers = [
+                        myWallet,
+                        fid ? `fid:${fid}` : null,
+                      ].filter(Boolean) as string[];
+                      freeResult = myIdentifiers.includes(m.winner) ? "WIN" : "LOSS";
                     }
 
                     return (
@@ -722,6 +736,33 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+
+        {/* === LOGOUT (web only — hidden inside Farcaster Mini App) === */}
+        {!isInMiniApp && (
+          <div className="mt-10 flex justify-center">
+            <button
+              onClick={handleLogout}
+              className="text-xs uppercase tracking-widest font-bold px-5 py-2 rounded-lg transition-all"
+              style={{
+                color: "#8b4a4a",
+                background: "transparent",
+                border: "1px solid #5a2020",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "#1a0505";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "#8b1a1a";
+                (e.currentTarget as HTMLButtonElement).style.color = "#c07070";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "#5a2020";
+                (e.currentTarget as HTMLButtonElement).style.color = "#8b4a4a";
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        )}
       </main>
       <Footer />
     </div>
