@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState, useCallback } from "react";
+import { use, useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import WalletButton from "@/components/WalletButton";
 import Navbar from "@/components/Navbar";
@@ -47,6 +47,9 @@ export default function FreeFightRoom({
 
   const [view, setView] = useState<ViewState>("loading");
   const [match, setMatch] = useState<FreeMatch | null>(null);
+  // Ref mirrors match state so interval callbacks (stale closures) can always
+  // access the most-recently-loaded match data — specifically stats1 fallback.
+  const matchRef = useRef<FreeMatch | null>(null);
   const [myRole, setMyRole] = useState<"p1" | "p2" | "spectator">("spectator");
   const [stats, setStats] = useState<GladiatorStats>(DEFAULT_STATS);
   const [fightResult, setFightResult] = useState<FightResult | null>(null);
@@ -66,6 +69,7 @@ export default function FreeFightRoom({
     }
     const m: FreeMatch = await res.json();
     setMatch(m);
+    matchRef.current = m;
     return m;
   }, [matchId]);
 
@@ -149,14 +153,35 @@ export default function FreeFightRoom({
   }
 
   // ── Poll while waiting for player2 ──────────────────────────────────────────
+  // Bug 2 fix: don't clearInterval before confirming stats are present.
+  // Root cause: the join route's KV write spreads the existing match. If KV
+  // read-after-write hits a lagging replica that doesn't yet have the creator's
+  // stats1 PATCH, the join-produced record omits stats1. The old code called
+  // clearInterval before runFight, so a silent early-return (missing stats)
+  // left the creator stuck on "WAITING FOR OPPONENT" with no retry.
+  //
+  // Fix: keep polling if state is "ready" but stats aren't both present yet.
+  // Use matchRef to access the latest-loaded match from the stale interval
+  // closure — this gives us the stats1 that was present at mount time as
+  // a fallback if the freshly-polled record is missing it due to KV lag.
   useEffect(() => {
     if (view !== "waiting_p2") return;
     const interval = setInterval(async () => {
       const m = await loadMatch();
-      if (m?.state === "ready") {
-        clearInterval(interval);
-        runFight(m);
+      if (!m || m.state !== "ready") return; // still waiting — keep polling
+
+      // If stats1 is missing from the polled match but present in an earlier
+      // load (e.g. initial mount), recover it. matchRef.current is always the
+      // most-recently-loaded match, but may be the same stale copy; try both.
+      const stats1 = m.stats1 ?? matchRef.current?.stats1;
+      if (!stats1 || !m.stats2) {
+        // Stats not yet propagated — keep polling, do NOT clear interval yet
+        return;
       }
+
+      // Both stats confirmed present — stop polling and run the fight
+      clearInterval(interval);
+      runFight({ ...m, stats1 });
     }, 3000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -106,66 +106,13 @@ export default function FreeFightCreate() {
     }
   }
 
+  // Bug 1 fix: skip the intermediate confirmation screen entirely.
+  // Redirect straight to the fight room as soon as the match is created.
   if (step === "done" && createdMatchId) {
-    const origin =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : "https://gladaitors.vercel.app";
-    const fightUrl = `${origin}/free-fight/${createdMatchId}`;
-    const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(
-      "Come fight me in GLADAITOR! ⚔️ Configure your gladaitor and challenge me (FREE)"
-    )}&embeds[]=${encodeURIComponent(fightUrl)}`;
-
+    router.push(`/free-fight/${createdMatchId}`);
     return (
-      <div className="arena-bg min-h-screen flex flex-col">
-        <Navbar><WalletButton /></Navbar>
-        <main className="flex-1 max-w-lg mx-auto w-full px-6 py-16 text-center">
-          <div className="text-4xl font-bold mb-2" style={{ color: "#b8860b" }}>
-            FREE FIGHT CREATED
-          </div>
-          {isPublic && (
-            <p className="text-xs mb-4 font-bold uppercase tracking-widest" style={{ color: "#4a7c59" }}>
-              Listed in Open Fights
-            </p>
-          )}
-          <p className="text-sm mb-6" style={{ color: "#8b6a40" }}>
-            Share with your opponent — opens directly in Farcaster.
-          </p>
-          <div
-            className="rounded-lg px-4 py-3 mb-6 font-mono text-sm break-all"
-            style={{ background: "#e0d4bc", border: "1px solid #c4a882", color: "#4a3010" }}
-          >
-            {fightUrl}
-          </div>
-          <div className="space-y-3">
-            <button
-              className="btn-primary w-full"
-              onClick={() => window.open(warpcastUrl, "_blank", "noopener,noreferrer")}
-            >
-              Share on Farcaster
-            </button>
-            <button
-              className="btn-secondary w-full"
-              onClick={() => navigator.clipboard.writeText(fightUrl).catch(() => {})}
-            >
-              Copy Link
-            </button>
-            <button
-              className="btn-secondary w-full"
-              onClick={() => router.push(`/free-fight/${createdMatchId}`)}
-            >
-              Go to Fight Room
-            </button>
-            <button
-              className="text-xs transition-colors mt-2 block mx-auto"
-              style={{ color: "#9a7a50" }}
-              onClick={() => router.push("/")}
-            >
-              Back to Home
-            </button>
-          </div>
-        </main>
-        <Footer />
+      <div className="arena-bg min-h-screen flex items-center justify-center">
+        <p className="text-amber-400 animate-pulse">Entering fight room...</p>
       </div>
     );
   }
