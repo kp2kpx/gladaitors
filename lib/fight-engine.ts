@@ -12,6 +12,16 @@
 //   SPD 9 vs 5 (diff=4): rates 14:10  → 40% more attacks for faster ✓
 //   SPD 5 vs 5 (diff=0): rates 10:10  → equal attacks ✓
 //   SPD 10 vs 1 (diff=9): rates 19:10 → 90% more attacks for faster ✓
+//
+// LCK mechanic: shared crit pool system (replaces floor(LCK/2)*10% flat chance)
+//   - At fight start, roll pool = 0.30–0.499 (varies per fight = randomness twist)
+//   - Each fighter's crit chance = (own.luck / (own.luck + opponent.luck)) × pool
+//   - Same LCK = same crit chance (fair split). Higher LCK = proportionally larger share.
+//   - Every LCK point matters. No floor waste.
+//
+// Pool derivation:
+//   seed = nextSeed(initial_seed)
+//   pool = 0.30 + (seed % 200) / 1000   → gives 0.300 to 0.499
 
 export interface GladiatorStats {
   strength: number;
@@ -72,7 +82,8 @@ function nextSeed(seed: number): number {
 function calcDamage(
   attacker: GladiatorStats,
   defender: GladiatorStats,
-  seed: number
+  seed: number,
+  critPool: number
 ): { damage: number; isCrit: boolean; nextSeedVal: number } {
   const nextSeedVal = nextSeed(seed);
 
@@ -82,10 +93,13 @@ function calcDamage(
   // Damage = max(1, STR - effectiveDef)
   const base = Math.max(1, attacker.strength - effectiveDef);
 
-  // Crit chance = floor(LCK / 2) * 10%
-  const critChancePct = Math.floor(attacker.luck / 2) * 10;
-  const roll = nextSeedVal % 100;
-  const isCrit = roll < critChancePct;
+  // Shared crit pool system:
+  //   critChance = (own.luck / (own.luck + opponent.luck)) × pool
+  //   Guard: if both LCK are 0 (shouldn't happen with min-1 stat) → pool/2 each
+  const lckSum = attacker.luck + defender.luck;
+  const critChance = lckSum === 0 ? critPool / 2 : (attacker.luck / lckSum) * critPool;
+  const roll = nextSeedVal % 1000 / 1000; // 0.000 to 0.999
+  const isCrit = roll < critChance;
   const damage = isCrit ? base * 2 : base;
 
   return { damage, isCrit, nextSeedVal };
@@ -100,6 +114,11 @@ export function simulateFight(
   const log: RoundLog[] = [];
 
   let seed = (Math.random() * 0xffffffff) >>> 0;
+
+  // Derive crit pool from first seed tick: 0.300 to 0.499
+  // This is the total crit intensity shared across both fighters for this fight.
+  seed = nextSeed(seed);
+  const critPool = 0.30 + (seed % 200) / 1000;
 
   let totalDamageByP1 = 0;
   let totalDamageByP2 = 0;
@@ -174,7 +193,7 @@ export function simulateFight(
       attackEventIndex++;
 
       if (event.who === "p1") {
-        const r = calcDamage(g1, g2, seed);
+        const r = calcDamage(g1, g2, seed, critPool);
         seed = r.nextSeedVal;
         hp2 -= r.damage;
         totalDamageByP1 += r.damage;
@@ -192,7 +211,7 @@ export function simulateFight(
           speedGap,
         });
       } else {
-        const r = calcDamage(g2, g1, seed);
+        const r = calcDamage(g2, g1, seed, critPool);
         seed = r.nextSeedVal;
         hp1 -= r.damage;
         totalDamageByP2 += r.damage;

@@ -224,9 +224,9 @@ export default function TrainingPage() {
   }
 
   function handleReplayDone() {
-    // "View Full Stats" from replay overlay → go to result summary
-    setShowSummary(true);
-    setStep("result");
+    // After replay completes → return to main configure view.
+    // fightResult is preserved so FightLog renders below MatchupAnalysis.
+    setStep("configure");
   }
 
   function handleReplayPlayAgain() {
@@ -298,6 +298,13 @@ export default function TrainingPage() {
 
             {/* Live matchup analysis — updates as sliders move */}
             <MatchupAnalysis stats1={stats1} stats2={stats2} />
+
+            {/* Fight log — appears below matchup analysis after a fight runs */}
+            {fightResult && (
+              <div className="mb-4" style={{ animation: "fadeIn 0.3s ease-in" }}>
+                <FightLog result={fightResult} />
+              </div>
+            )}
 
             {/* Status / FIGHT button */}
             <div className="flex flex-col items-center gap-2">

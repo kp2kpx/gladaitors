@@ -24,14 +24,15 @@ function HpBar({ hp, color }: { hp: number; color: "red" | "blue" }) {
           className="h-full rounded-full transition-none"
           style={{
             width: `${pct}%`,
-            background: color === "red" ? "#dc2626" : "#3b82f6",
+            // Slightly desaturated red/blue to match parchment palette
+            background: color === "red" ? "#c47070" : "#6090c8",
           }}
         />
       </div>
       <span
         className="tabular-nums text-xs"
         style={{
-          color: hp === 0 ? "#ef4444" : hp < 25 ? "#f59e0b" : "#9ca3af",
+          color: hp === 0 ? "#e8a0a0" : hp < 25 ? "#d4a853" : "#9a9080",
           minWidth: "1.8rem",
         }}
       >
@@ -51,7 +52,7 @@ function SummaryBar({ result }: { result: FightResult }) {
     <div
       className="rounded-lg p-3 mb-3"
       style={{
-        background: "#1a1208",
+        background: "#16120d",
         border: "1px solid #2a2010",
       }}
     >
@@ -60,67 +61,67 @@ function SummaryBar({ result }: { result: FightResult }) {
         <div />
         <div
           className="text-center font-bold uppercase tracking-wide text-xs"
-          style={{ color: "#dc2626" }}
+          style={{ color: "#e8a0a0" }}
         >
           RED
         </div>
         <div
           className="text-center font-bold uppercase tracking-wide text-xs"
-          style={{ color: "#3b82f6" }}
+          style={{ color: "#90b8e8" }}
         >
           BLUE
         </div>
 
         {/* Total hits */}
-        <div style={{ color: "#4b3a28" }}>Total hits</div>
+        <div style={{ color: "#9a9080" }}>Total hits</div>
         <div
           className="text-center font-bold tabular-nums"
-          style={{ color: "#9ca3af" }}
+          style={{ color: "#e8dcc8" }}
         >
           {totalHitsRed}
         </div>
         <div
           className="text-center font-bold tabular-nums"
-          style={{ color: "#9ca3af" }}
+          style={{ color: "#e8dcc8" }}
         >
           {totalHitsBlue}
         </div>
 
         {/* Total damage */}
-        <div style={{ color: "#4b3a28" }}>Total damage</div>
+        <div style={{ color: "#9a9080" }}>Total damage</div>
         <div
           className="text-center font-bold tabular-nums"
-          style={{ color: "#9ca3af" }}
+          style={{ color: "#e8dcc8" }}
         >
           {result.totalDamageByP1}
         </div>
         <div
           className="text-center font-bold tabular-nums"
-          style={{ color: "#9ca3af" }}
+          style={{ color: "#e8dcc8" }}
         >
           {result.totalDamageByP2}
         </div>
 
         {/* Crits */}
-        <div style={{ color: "#4b3a28" }}>Crits</div>
+        <div style={{ color: "#9a9080" }}>Crits</div>
         <div
           className="text-center font-bold tabular-nums"
-          style={{ color: "#fbbf24" }}
+          style={{ color: "#d4a853" }}
         >
           {result.critsP1}
         </div>
         <div
           className="text-center font-bold tabular-nums"
-          style={{ color: "#fbbf24" }}
+          style={{ color: "#d4a853" }}
         >
           {result.critsP2}
         </div>
 
         {/* Fight length */}
-        <div style={{ color: "#4b3a28" }}>Attack events</div>
+        <div style={{ color: "#9a9080" }}>Attack events</div>
         <div
           className="col-span-2 text-center font-bold tabular-nums"
-          style={{ color: "#9ca3af" }}
+          style={{ color: "#e8dcc8" }}
         >
           {result.log.length}
         </div>
@@ -142,7 +143,7 @@ export default function FightLog({ result }: Props) {
     <div
       className="rounded-lg p-3"
       style={{
-        background: "#15120a",
+        background: "#1a1510",
         border: "1px solid #2a2010",
       }}
     >
@@ -150,11 +151,11 @@ export default function FightLog({ result }: Props) {
       <div className="flex items-center justify-between mb-3">
         <span
           className="text-xs font-bold uppercase tracking-widest"
-          style={{ color: "#b8860b" }}
+          style={{ color: "#d4a853" }}
         >
-          Fight Log
+          FIGHT LOG
         </span>
-        <span className="text-xs" style={{ color: "#4b3a28" }}>
+        <span className="text-xs" style={{ color: "#9a9080" }}>
           {result.log.length} attack events
         </span>
       </div>
@@ -164,7 +165,7 @@ export default function FightLog({ result }: Props) {
 
       {/* Scrollable event table */}
       <div
-        className="overflow-y-auto overflow-x-auto rounded"
+        className="overflow-y-auto overflow-x-auto rounded fight-log-scroll"
         style={{ maxHeight: "320px" }}
       >
         <table
@@ -180,36 +181,36 @@ export default function FightLog({ result }: Props) {
           </colgroup>
           <thead
             className="sticky top-0"
-            style={{ background: "#15120a", zIndex: 1 }}
+            style={{ background: "#1a1510", zIndex: 1 }}
           >
             <tr style={{ borderBottom: "1px solid #2a2010" }}>
               <th
                 className="text-left px-1.5 py-1.5 text-xs uppercase tracking-widest"
-                style={{ color: "#4b3a28" }}
+                style={{ color: "#9a9080" }}
               >
                 #
               </th>
               <th
                 className="text-left px-1.5 py-1.5 text-xs uppercase tracking-widest"
-                style={{ color: "#4b3a28" }}
+                style={{ color: "#9a9080" }}
               >
                 By
               </th>
               <th
                 className="text-center px-1.5 py-1.5 text-xs uppercase tracking-widest"
-                style={{ color: "#4b3a28" }}
+                style={{ color: "#9a9080" }}
               >
                 Dmg
               </th>
               <th
                 className="text-center px-1.5 py-1.5 text-xs uppercase tracking-widest"
-                style={{ color: "#dc2626" }}
+                style={{ color: "#e8a0a0" }}
               >
                 RED HP
               </th>
               <th
                 className="text-center px-1.5 py-1.5 text-xs uppercase tracking-widest"
-                style={{ color: "#3b82f6" }}
+                style={{ color: "#90b8e8" }}
               >
                 BLU HP
               </th>
@@ -221,10 +222,10 @@ export default function FightLog({ result }: Props) {
               const isFatal = i === fatalIndex;
 
               const rowBg = isFatal
-                ? "rgba(184,134,11,0.12)"
+                ? "rgba(212,168,83,0.15)"
                 : i % 2 === 0
                 ? "transparent"
-                : "rgba(255,255,255,0.02)";
+                : "rgba(255,255,255,0.03)";
 
               return (
                 <tr
@@ -232,14 +233,14 @@ export default function FightLog({ result }: Props) {
                   style={{
                     background: rowBg,
                     borderBottom: isFatal
-                      ? "1px solid rgba(184,134,11,0.3)"
+                      ? "1px solid rgba(212,168,83,0.3)"
                       : "1px solid rgba(255,255,255,0.03)",
                   }}
                 >
                   {/* Event # */}
                   <td
                     className="px-1.5 py-1 text-xs tabular-nums"
-                    style={{ color: "#4b3a28" }}
+                    style={{ color: "#9a9080" }}
                   >
                     {i + 1}
                   </td>
@@ -247,7 +248,7 @@ export default function FightLog({ result }: Props) {
                   {/* Attacker */}
                   <td
                     className="px-1.5 py-1 text-xs font-bold uppercase"
-                    style={{ color: isRed ? "#f87171" : "#60a5fa" }}
+                    style={{ color: isRed ? "#e8a0a0" : "#90b8e8" }}
                   >
                     {isRed ? "RED" : "BLUE"}
                   </td>
@@ -257,7 +258,7 @@ export default function FightLog({ result }: Props) {
                     {entry.isCrit ? (
                       <span
                         className="text-xs font-bold"
-                        style={{ color: "#fbbf24" }}
+                        style={{ color: "#d4a853" }}
                         title="Critical hit"
                       >
                         {entry.damage} &#9889; CRIT
@@ -265,7 +266,7 @@ export default function FightLog({ result }: Props) {
                     ) : (
                       <span
                         className="text-xs font-bold tabular-nums"
-                        style={{ color: "#e5e7eb" }}
+                        style={{ color: "#e8dcc8" }}
                       >
                         {entry.damage}
                       </span>
@@ -298,7 +299,7 @@ export default function FightLog({ result }: Props) {
           className="mt-2 pt-2 text-center text-xs font-bold uppercase tracking-widest"
           style={{
             borderTop: "1px solid #2a2010",
-            color: "#b8860b",
+            color: "#d4a853",
           }}
         >
           &#9876; Fatal blow on event #{fatalIndex + 1} &#9876;

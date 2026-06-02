@@ -22,9 +22,14 @@ function effectiveDef(own: GladiatorStats, opp: GladiatorStats): number {
   return Math.max(0, own.defense - opp.intel);
 }
 
-function critChance(own: GladiatorStats): number {
-  // floor(LCK / 2) × 10  → expressed as 0–40 (pct)
-  return Math.floor(own.luck / 2) * 10;
+// Shared crit pool mechanic: pool varies 30–50% per fight.
+// Show the mid-range estimate (pool=0.40) to give a representative crit% per fighter.
+// Actual value varies ±10pp per fight — shown as "~X%" to signal approximation.
+const POOL_MID = 0.40;
+function critChanceEst(own: GladiatorStats, opp: GladiatorStats): number {
+  const lckSum = own.luck + opp.luck;
+  if (lckSum === 0) return Math.round(POOL_MID / 2 * 100);
+  return Math.round((own.luck / lckSum) * POOL_MID * 100);
 }
 
 function hitsToKillBase(dmg: number): number {
@@ -63,7 +68,7 @@ function attackRateAdvantage(s1: GladiatorStats, s2: GladiatorStats): {
 // DPS proxy: base_dmg × (1 + crit_chance) × attack_rate_multiplier
 function dpsProxy(own: GladiatorStats, opp: GladiatorStats, isG1: boolean, s1: GladiatorStats, s2: GladiatorStats): number {
   const dmg = baseDamage(own, opp);
-  const crit = critChance(own) / 100;
+  const crit = critChanceEst(own, opp) / 100;
   const diff = Math.abs(s1.speed - s2.speed);
   const g1Faster = s1.speed >= s2.speed;
   const rate = isG1
@@ -150,8 +155,8 @@ export default function MatchupAnalysis({ stats1, stats2 }: Props) {
   const dmg1 = baseDamage(stats1, stats2);
   const dmg2 = baseDamage(stats2, stats1);
 
-  const crit1 = critChance(stats1);
-  const crit2 = critChance(stats2);
+  const crit1 = critChanceEst(stats1, stats2);
+  const crit2 = critChanceEst(stats2, stats1);
 
   const critDmg1 = dmg1 * 2;
   const critDmg2 = dmg2 * 2;
@@ -199,9 +204,9 @@ export default function MatchupAnalysis({ stats1, stats2 }: Props) {
       cmp: compareHigherBetter(dmg1, dmg2),
     },
     {
-      label: "Crit chance",
-      v1: `${crit1}%`,
-      v2: `${crit2}%`,
+      label: "Crit chance (est)",
+      v1: `~${crit1}%`,
+      v2: `~${crit2}%`,
       cmp: compareHigherBetter(crit1, crit2),
     },
     {
