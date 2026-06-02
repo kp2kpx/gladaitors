@@ -89,22 +89,28 @@ function compareLowerBetter(v1: number, v2: number): { r: CellSide; b: CellSide 
 }
 
 // ── Cell styling ──────────────────────────────────────────────────────────────
+// cmp: the full comparison result for this row (both sides)
+// column: which column this cell is ("red" | "blue")
 
-function cellStyle(side: CellSide, winner: "red" | "blue"): React.CSSProperties {
-  if (side === "red" && winner === "red") {
-    return { background: "rgba(220,38,38,0.18)", color: "#f87171" };
+function cellStyle(
+  side: CellSide,
+  column: "red" | "blue",
+  cmp: { r: CellSide; b: CellSide }
+): React.CSSProperties {
+  if (side === "red" && column === "red") {
+    // RED has advantage
+    return { background: "rgba(200,80,80,0.15)", color: "#e8a0a0" };
   }
-  if (side === "blue" && winner === "blue") {
-    return { background: "rgba(59,130,246,0.18)", color: "#60a5fa" };
+  if (side === "blue" && column === "blue") {
+    // BLUE has advantage
+    return { background: "rgba(80,120,200,0.15)", color: "#90b8e8" };
   }
-  // "loser" side: subtle dim
-  if (side === "neutral" && winner === "red") {
-    return { color: "#6b7280" };
+  // Neither side has advantage on this stat — true tie
+  if (cmp.r === "neutral" && cmp.b === "neutral") {
+    return { color: "#9a9080" };
   }
-  if (side === "neutral" && winner === "blue") {
-    return { color: "#6b7280" };
-  }
-  return {};
+  // This side lost the comparison (opponent has advantage) — soft warm white
+  return { color: "#e8dcc8" };
 }
 
 // ── Sub-component: one stat cell ──────────────────────────────────────────────
@@ -112,20 +118,25 @@ function cellStyle(side: CellSide, winner: "red" | "blue"): React.CSSProperties 
 function Cell({
   value,
   side,
-  winner,
+  column,
+  cmp,
+  noBackground,
 }: {
   value: string;
   side: CellSide;
-  winner: "red" | "blue";
+  column: "red" | "blue";
+  cmp: { r: CellSide; b: CellSide };
+  noBackground?: boolean;
 }) {
-  const style = cellStyle(side, winner);
+  const style = cellStyle(side, column, cmp);
+  // noBackground: strip fill (used for attack rate row — text-only coloring)
+  const finalStyle: React.CSSProperties = noBackground
+    ? { color: style.color }
+    : { borderRadius: "3px", ...style };
   return (
     <td
       className="px-2 py-1.5 text-center text-xs font-bold tabular-nums"
-      style={{
-        borderRadius: "3px",
-        ...style,
-      }}
+      style={finalStyle}
     >
       {value}
     </td>
@@ -262,43 +273,49 @@ export default function MatchupAnalysis({ stats1, stats2 }: Props) {
             <col style={{ width: "30%" }} />
           </colgroup>
           <thead>
-            <tr style={{ borderBottom: "1px solid #2a2010" }}>
+            <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
               <th
                 className="text-left px-2 pb-1.5 text-xs uppercase tracking-widest"
-                style={{ color: "#4b3a28" }}
+                style={{ color: "#c8b89a" }}
               >
                 Stat
               </th>
               <th
                 className="px-2 pb-1.5 text-center text-xs font-bold uppercase tracking-widest"
-                style={{ color: "#dc2626" }}
+                style={{ color: "#e8a0a0" }}
               >
                 RED
               </th>
               <th
                 className="px-2 pb-1.5 text-center text-xs font-bold uppercase tracking-widest"
-                style={{ color: "#3b82f6" }}
+                style={{ color: "#90b8e8" }}
               >
                 BLUE
               </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.label}
-                style={{ borderBottom: "1px solid #1c1608" }}
-              >
-                <td
-                  className="px-2 py-1.5 text-xs"
-                  style={{ color: "#8b6c3a" }}
+            {rows.map((row, i) => {
+              const isAttackRate = row.label === "Attack rate";
+              return (
+                <tr
+                  key={row.label}
+                  style={{
+                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    background: i % 2 === 1 ? "rgba(255,255,255,0.05)" : "transparent",
+                  }}
                 >
-                  {row.label}
-                </td>
-                <Cell value={row.v1} side={row.cmp.r} winner="red" />
-                <Cell value={row.v2} side={row.cmp.b} winner="blue" />
-              </tr>
-            ))}
+                  <td
+                    className="px-2 py-1.5 text-xs"
+                    style={{ color: "#a09080" }}
+                  >
+                    {row.label}
+                  </td>
+                  <Cell value={row.v1} side={row.cmp.r} column="red" cmp={row.cmp} noBackground={isAttackRate} />
+                  <Cell value={row.v2} side={row.cmp.b} column="blue" cmp={row.cmp} noBackground={isAttackRate} />
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -316,10 +333,10 @@ export default function MatchupAnalysis({ stats1, stats2 }: Props) {
           style={{
             color:
               favored === "RED"
-                ? "#f87171"
+                ? "#e8a0a0"
                 : favored === "BLUE"
-                ? "#60a5fa"
-                : "#b8860b",
+                ? "#90b8e8"
+                : "#d4a853",
           }}
         >
           {favored === "EVEN"
