@@ -840,6 +840,43 @@ function FlyingProjectile({
   );
 }
 
+// ─── Combo flash label ────────────────────────────────────────────────────────
+// Shown briefly above the attacker's side on the first hit of a combo burst.
+// multiplier: 2, 3, or 4. Fades in/out over ~400ms total.
+// key prop must change on each new combo to re-trigger the animation.
+
+function ComboLabel({
+  multiplier,
+  side,
+}: {
+  multiplier: 2 | 3 | 4;
+  side: "left" | "right";
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        // Float above the attacker's sprite area. left side = p1, right side = p2.
+        [side === "left" ? "left" : "right"]: "8px",
+        top: "0px",
+        zIndex: 30,
+        pointerEvents: "none",
+        // Amber gold to match the parchment palette
+        color: "#d4a853",
+        fontSize: "1.1rem",
+        fontWeight: 900,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        textShadow: "0 0 10px rgba(212,168,83,0.85), 0 0 3px rgba(0,0,0,0.9)",
+        whiteSpace: "nowrap",
+        animation: "gladComboFlash 400ms ease-out forwards",
+      }}
+    >
+      {multiplier}×
+    </div>
+  );
+}
+
 // ─── Attack announcement banner ───────────────────────────────────────────────
 
 function AttackAnnounce({
@@ -945,6 +982,10 @@ export default function FightReplay({
   const [projectile, setProjectile] = useState<{ id: number; attacker: "p1" | "p2"; isCrit: boolean } | null>(null);
   const projectileIdRef = useRef(0);
 
+  // Combo flash label — shown on comboStep===1, key changes per combo to re-trigger animation
+  const [comboLabel, setComboLabel] = useState<{ id: number; multiplier: 2 | 3 | 4; side: "left" | "right" } | null>(null);
+  const comboLabelIdRef = useRef(0);
+
   // Attack announcement banner
   const [announceText, setAnnounceText] = useState("");
   const [announceColor, setAnnounceColor] = useState<"gold" | "red">("gold");
@@ -1039,6 +1080,12 @@ export default function FightReplay({
       @keyframes gladImpactGlow {
         0%   { opacity: 1; }
         100% { opacity: 0; }
+      }
+      @keyframes gladComboFlash {
+        0%   { opacity: 0; transform: translateY(8px) scale(0.8); }
+        25%  { opacity: 1; transform: translateY(0px) scale(1.15); }
+        65%  { opacity: 1; transform: translateY(0px) scale(1); }
+        100% { opacity: 0; transform: translateY(-4px) scale(0.95); }
       }
     `;
     document.head.appendChild(style);
@@ -1227,11 +1274,42 @@ export default function FightReplay({
     // Timing constants
     // Normal: 400ms announce → 400ms hit → next
     // Crit:   400ms announce → 1300ms hit (200ms charge + 800ms flight + 300ms impact) → next
+    // Combo:  120ms between consecutive hits — very fast, no announce banner per hit
     const ANNOUNCE_DURATION = 400;
     const HIT_DURATION_NORMAL = 400;
     const HIT_DURATION_CRIT = 1300; // charge(200) + flight(800) + impact(300)
-    const DOUBLE_GAP = 600;   // gap between hit 1 and hit 2 for double attacks
+    const COMBO_HIT_GAP = 120;     // delay between hits in a combo burst
+    const DOUBLE_GAP = 600;         // gap between hit 1 and hit 2 for legacy double attacks
     const POST_ROUND_PAUSE = 500;
+
+    // ── Pre-pass: compute the total run length for each log entry ─────────────
+    // comboRunLength[i] = total number of hits in the combo run that entry i belongs to.
+    // For non-combo entries (isCombo=false) this will be 1.
+    // This lets us know on step=1 how large the burst is, so we can show "2×", "3×", "4×".
+    const comboRunLength: number[] = new Array(result.log.length).fill(1);
+    {
+      let idx = 0;
+      while (idx < result.log.length) {
+        if (result.log[idx].isCombo && result.log[idx].comboStep === 1) {
+          // Find the full extent of this run
+          let runEnd = idx + 1;
+          while (
+            runEnd < result.log.length &&
+            result.log[runEnd].isCombo &&
+            result.log[runEnd].attacker === result.log[idx].attacker
+          ) {
+            runEnd++;
+          }
+          const len = runEnd - idx;
+          for (let k = idx; k < runEnd; k++) {
+            comboRunLength[k] = len;
+          }
+          idx = runEnd;
+        } else {
+          idx++;
+        }
+      }
+    }
 
     let t = 0;
 
@@ -1242,6 +1320,9 @@ export default function FightReplay({
       if (!rounds[ri]) rounds[ri] = [];
       rounds[ri].push(entry);
     });
+
+    // We need the flat log index for comboRunLength lookup
+    let globalLogIdx = 0;
 
     rounds.forEach((entries, ri) => {
       // Determine first mover label for round header
@@ -1255,69 +1336,118 @@ export default function FightReplay({
       }, t);
       t += 500; // show round header for 500ms before first attack announce
 
-      // Detect if this round has a double attack sequence
-      // Double attack pattern: [first_attacker, second_attacker, first_attacker(double)]
-      // or with tied: [p1, p2] simultaneous
+      // Detect if this round has a double attack sequence (legacy compat)
       const hasDouble = entries.some((e) => e.isDoubleAttack);
 
-      // Schedule each hit with announce → damage sequencing
-      // For double attacks, spread them out with DOUBLE_GAP
       let localOffset = 0;
 
       entries.forEach((entry, hi) => {
+        const logIdx = globalLogIdx + hi;
         const isDouble = entry.isDoubleAttack;
+        const isComboHit = entry.isCombo;
+        const isFirstComboHit = isComboHit && entry.comboStep === 1;
+        const runLen = comboRunLength[logIdx] as (2 | 3 | 4 | number);
+
         const hitLabel = isDouble
           ? "HIT 2"
           : hasDouble && !entry.isDoubleAttack && hi === 0
           ? "HIT 1"
           : undefined;
 
-        // Extra gap before double strike hit
-        if (isDouble) {
-          localOffset += DOUBLE_GAP;
-        }
+        if (isComboHit && entry.comboStep > 1) {
+          // ── Continuation combo hit ────────────────────────────────────────
+          // No announce banner. Very short delay after previous hit.
+          // localOffset was already advanced by COMBO_HIT_GAP from the previous entry.
 
-        // Attack announcement
-        schedule(() => {
-          const isP1Attacker = entry.attacker === "p1";
-          let text: string;
-          let color: "gold" | "red";
+          // Damage fires at current offset (no announce delay for combo continuations)
+          schedule(() => {
+            setPhase({ type: "hit", entry, hp1: entry.hp1After, hp2: entry.hp2After });
+            triggerHit(
+              entry.attacker,
+              entry.damage,
+              entry.isCrit,
+              hitLabel,
+              entry.hp1After,
+              entry.hp2After
+            );
+          }, t + localOffset);
 
+          const hitDuration = entry.isCrit ? HIT_DURATION_CRIT : HIT_DURATION_NORMAL;
+          // After this hit, if there are more combo hits coming, use COMBO_HIT_GAP;
+          // otherwise use the full hit duration to let the last impact settle.
+          const nextEntry = hi + 1 < entries.length ? entries[hi + 1] : null;
+          const nextIsCombo = nextEntry?.isCombo && nextEntry.attacker === entry.attacker;
+          localOffset += nextIsCombo ? COMBO_HIT_GAP : hitDuration;
+
+        } else {
+          // ── Normal hit OR first hit of a combo burst ──────────────────────
+
+          // Extra gap before legacy double strike hit
           if (isDouble) {
-            if (isP1Attacker) {
-              text = `⚡ YOU ATTACK TWICE`;
+            localOffset += DOUBLE_GAP;
+          }
+
+          // Attack announcement banner (only for non-combo, or the first combo hit)
+          schedule(() => {
+            const isP1Attacker = entry.attacker === "p1";
+            let text: string;
+            let color: "gold" | "red";
+
+            if (isDouble) {
+              if (isP1Attacker) {
+                text = `⚡ YOU ATTACK TWICE`;
+                color = "gold";
+              } else {
+                text = `⚡ ${p2Label} ATTACKS TWICE`;
+                color = "red";
+              }
+            } else if (isP1Attacker) {
+              text = `⚔️ YOU ATTACK`;
               color = "gold";
             } else {
-              text = `⚡ ${p2Label} ATTACKS TWICE`;
+              text = `🛡️ ${p2Label} ATTACKS`;
               color = "red";
             }
-          } else if (isP1Attacker) {
-            text = `⚔️ YOU ATTACK`;
-            color = "gold";
+            showAnnounce(text, color);
+            setPhase({ type: "hit", entry, hp1: entry.hp1After, hp2: entry.hp2After });
+          }, t + localOffset);
+
+          // Damage lands after announce
+          schedule(() => {
+            triggerHit(
+              entry.attacker,
+              entry.damage,
+              entry.isCrit,
+              hitLabel,
+              entry.hp1After,
+              entry.hp2After
+            );
+
+            // Show combo flash label on first hit of a combo burst
+            if (isFirstComboHit && runLen >= 2) {
+              const labelId = ++comboLabelIdRef.current;
+              const side: "left" | "right" = entry.attacker === "p1" ? "left" : "right";
+              setComboLabel({ id: labelId, multiplier: Math.min(runLen, 4) as 2 | 3 | 4, side });
+              // Clear after animation completes (~400ms)
+              schedule(() => setComboLabel(null), 440);
+            }
+          }, t + localOffset + ANNOUNCE_DURATION);
+
+          const hitDuration = entry.isCrit ? HIT_DURATION_CRIT : HIT_DURATION_NORMAL;
+
+          // If this is the first hit of a combo, the next entry follows quickly
+          const nextEntry = hi + 1 < entries.length ? entries[hi + 1] : null;
+          const nextIsCombo = nextEntry?.isCombo && nextEntry.attacker === entry.attacker;
+          if (nextIsCombo) {
+            // Advance only enough for the announce + a brief settle before first combo continues
+            localOffset += ANNOUNCE_DURATION + COMBO_HIT_GAP;
           } else {
-            text = `🛡️ ${p2Label} ATTACKS`;
-            color = "red";
+            localOffset += ANNOUNCE_DURATION + hitDuration;
           }
-          showAnnounce(text, color);
-          setPhase({ type: "hit", entry, hp1: entry.hp1After, hp2: entry.hp2After });
-        }, t + localOffset);
-
-        // Damage lands after announce
-        schedule(() => {
-          triggerHit(
-            entry.attacker,
-            entry.damage,
-            entry.isCrit,
-            hitLabel,
-            entry.hp1After,
-            entry.hp2After
-          );
-        }, t + localOffset + ANNOUNCE_DURATION);
-
-        const hitDuration = entry.isCrit ? HIT_DURATION_CRIT : HIT_DURATION_NORMAL;
-        localOffset += ANNOUNCE_DURATION + hitDuration;
+        }
       });
 
+      globalLogIdx += entries.length;
       t += localOffset + POST_ROUND_PAUSE;
     });
 
@@ -1449,6 +1579,14 @@ export default function FightReplay({
             key={projectile.id}
             attacker={projectile.attacker}
             isCrit={projectile.isCrit}
+          />
+        )}
+        {/* Combo flash label — re-mounts on each new combo burst via key prop */}
+        {comboLabel && (
+          <ComboLabel
+            key={comboLabel.id}
+            multiplier={comboLabel.multiplier}
+            side={comboLabel.side}
           />
         )}
         <SpriteAvatar

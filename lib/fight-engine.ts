@@ -48,6 +48,11 @@ export interface RoundLog {
   // FightReplay and FightSummary which read this field.
   isDoubleAttack: boolean;
   speedGap: number;
+  // Combo mechanic fields (tagged by post-processing + 4× injection in fight loop)
+  // isCombo: true if this hit belongs to a 2/3/4× burst (consecutive same-attacker run)
+  // comboStep: 0 = isolated hit; 1 = first hit of combo; 2/3/4 = continuation hit
+  isCombo: boolean;
+  comboStep: number;
 }
 
 export interface FightResult {
@@ -144,6 +149,16 @@ export function simulateFight(
   let attackEventIndex = 0; // monotonically incrementing log entry counter
   let ticks = 0;
 
+  // Combo tracking: counts consecutive hits from the same attacker.
+  // Reset to 0 whenever the attacker changes. Used to:
+  //   1. Gate the 4× crit-extend bonus (max chain = 4)
+  //   2. Provide comboStep values during log generation (easier than pure post-process)
+  // We still do a post-process pass after the loop to set isCombo/comboStep correctly
+  // on all entries, because the in-loop tracking only knows the running count, not the
+  // final run length needed to decide if a "run of 2" is a combo vs an isolated pair.
+  let comboChainAttacker: "p1" | "p2" | null = null;
+  let comboChainLength = 0;
+
   // Fight runs until one (or both) gladiators reach 0 HP.
   // MAX_TICKS is a safety backstop only.
   while (hp1 > 0 && hp2 > 0 && ticks < MAX_TICKS) {
@@ -159,7 +174,8 @@ export function simulateFight(
     // We may have multiple attacks per tick if accumulators stack up
     // (this won't happen with the initial setup but is correct in general).
 
-    // Build the attack queue for this tick
+    // Build the attack queue for this tick.
+    // Type is mutable — 4× bonus hits get spliced in after their trigger.
     type AttackEvent = { who: "p1" | "p2" };
     const queue: AttackEvent[] = [];
 
@@ -186,11 +202,24 @@ export function simulateFight(
       return a.who === "p1" ? -1 : 1; // g1 wins tiebreak
     });
 
-    // Execute attacks in order, stopping if someone dies mid-tick
-    for (const event of queue) {
+    // Execute attacks in order, stopping if someone dies mid-tick.
+    // i is a regular index so we can splice bonus hits into the queue.
+    let i = 0;
+    while (i < queue.length) {
       if (hp1 <= 0 || hp2 <= 0) break;
 
+      const event = queue[i];
+      i++;
+
       attackEventIndex++;
+
+      // Update in-loop combo chain counter
+      if (comboChainAttacker === event.who) {
+        comboChainLength++;
+      } else {
+        comboChainAttacker = event.who;
+        comboChainLength = 1;
+      }
 
       if (event.who === "p1") {
         const r = calcDamage(g1, g2, seed, critPool);
@@ -209,7 +238,27 @@ export function simulateFight(
           attackedFirst: true,
           isDoubleAttack: false,
           speedGap,
+          // Placeholder values — overwritten by post-processing pass below
+          isCombo: false,
+          comboStep: 0,
         });
+
+        // 4× crit-extend: consecutive crit + speedGap≥5 + chain<4 + 40% roll
+        // Only inject if the target is still alive (hp2 > 0)
+        if (
+          r.isCrit &&
+          comboChainLength >= 2 && // must already be in a combo (≥2 consecutive)
+          comboChainLength < 4 &&  // cap at 4×
+          speedGap >= 5 &&
+          hp2 > 0
+        ) {
+          seed = nextSeed(seed);
+          const roll40 = (seed % 1000) / 1000;
+          if (roll40 < 0.40) {
+            // Inject bonus p1 attack immediately after current position
+            queue.splice(i, 0, { who: "p1" });
+          }
+        }
       } else {
         const r = calcDamage(g2, g1, seed, critPool);
         seed = r.nextSeedVal;
@@ -227,8 +276,51 @@ export function simulateFight(
           attackedFirst: true,
           isDoubleAttack: false,
           speedGap,
+          // Placeholder values — overwritten by post-processing pass below
+          isCombo: false,
+          comboStep: 0,
         });
+
+        // 4× crit-extend: same logic for p2
+        if (
+          r.isCrit &&
+          comboChainLength >= 2 &&
+          comboChainLength < 4 &&
+          speedGap >= 5 &&
+          hp1 > 0
+        ) {
+          seed = nextSeed(seed);
+          const roll40 = (seed % 1000) / 1000;
+          if (roll40 < 0.40) {
+            queue.splice(i, 0, { who: "p2" });
+          }
+        }
       }
+    }
+  }
+
+  // ── Post-process: tag isCombo / comboStep ────────────────────────────────
+  // Scan for runs of consecutive same-attacker entries.
+  // A run of length ≥ 2 is a combo: every entry in the run gets isCombo=true
+  // and comboStep = 1, 2, 3, ... (1-based position within the run).
+  // Single isolated hits remain isCombo=false, comboStep=0.
+  {
+    let idx = 0;
+    while (idx < log.length) {
+      // Find the end of the current run
+      let runEnd = idx + 1;
+      while (runEnd < log.length && log[runEnd].attacker === log[idx].attacker) {
+        runEnd++;
+      }
+      const runLength = runEnd - idx;
+      if (runLength >= 2) {
+        for (let k = idx; k < runEnd; k++) {
+          log[k].isCombo = true;
+          log[k].comboStep = k - idx + 1; // 1-based
+        }
+      }
+      // Single hits keep the placeholder isCombo=false, comboStep=0
+      idx = runEnd;
     }
   }
 
