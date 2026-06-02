@@ -1278,7 +1278,7 @@ export default function FightReplay({
     const ANNOUNCE_DURATION = 400;
     const HIT_DURATION_NORMAL = 400;
     const HIT_DURATION_CRIT = 1300; // charge(200) + flight(800) + impact(300)
-    const COMBO_HIT_GAP = 70;      // delay between hits in a combo burst
+    const COMBO_HIT_GAP = 20;      // delay between hits in a combo burst
     const DOUBLE_GAP = 600;         // gap between hit 1 and hit 2 for legacy double attacks
     const POST_ROUND_PAUSE = 500;
 
