@@ -10,6 +10,8 @@
 import { useState } from "react";
 import FightReplay from "@/components/FightReplay";
 import FightSummary from "@/components/FightSummary";
+import MatchupAnalysis from "./MatchupAnalysis";
+import FightLog from "./FightLog";
 import { simulateFight, FightResult } from "@/lib/fight-engine";
 import {
   GladiatorStats,
@@ -294,6 +296,9 @@ export default function TrainingPage() {
               />
             </div>
 
+            {/* Live matchup analysis — updates as sliders move */}
+            <MatchupAnalysis stats1={stats1} stats2={stats2} />
+
             {/* Status / FIGHT button */}
             <div className="flex flex-col items-center gap-2">
               {/* Readiness indicators */}
@@ -352,6 +357,11 @@ export default function TrainingPage() {
               opponentName="BLUE"
               onPlayAgain={resetToConfig}
             />
+
+            {/* Fight log — full chronological attack event breakdown */}
+            <div className="mt-4">
+              <FightLog result={fightResult} />
+            </div>
           </>
         )}
       </div>
