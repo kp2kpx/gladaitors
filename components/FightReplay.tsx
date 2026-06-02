@@ -1274,42 +1274,13 @@ export default function FightReplay({
     // Timing constants
     // Normal: 400ms announce → 400ms hit → next
     // Crit:   400ms announce → 1300ms hit (200ms charge + 800ms flight + 300ms impact) → next
-    // Combo:  120ms between consecutive hits — very fast, no announce banner per hit
+    // Combo:  70ms between consecutive hits — rapid back-to-back strikes, no announce banner per hit
     const ANNOUNCE_DURATION = 400;
     const HIT_DURATION_NORMAL = 400;
     const HIT_DURATION_CRIT = 1300; // charge(200) + flight(800) + impact(300)
-    const COMBO_HIT_GAP = 120;     // delay between hits in a combo burst
+    const COMBO_HIT_GAP = 70;      // delay between hits in a combo burst
     const DOUBLE_GAP = 600;         // gap between hit 1 and hit 2 for legacy double attacks
     const POST_ROUND_PAUSE = 500;
-
-    // ── Pre-pass: compute the total run length for each log entry ─────────────
-    // comboRunLength[i] = total number of hits in the combo run that entry i belongs to.
-    // For non-combo entries (isCombo=false) this will be 1.
-    // This lets us know on step=1 how large the burst is, so we can show "2×", "3×", "4×".
-    const comboRunLength: number[] = new Array(result.log.length).fill(1);
-    {
-      let idx = 0;
-      while (idx < result.log.length) {
-        if (result.log[idx].isCombo && result.log[idx].comboStep === 1) {
-          // Find the full extent of this run
-          let runEnd = idx + 1;
-          while (
-            runEnd < result.log.length &&
-            result.log[runEnd].isCombo &&
-            result.log[runEnd].attacker === result.log[idx].attacker
-          ) {
-            runEnd++;
-          }
-          const len = runEnd - idx;
-          for (let k = idx; k < runEnd; k++) {
-            comboRunLength[k] = len;
-          }
-          idx = runEnd;
-        } else {
-          idx++;
-        }
-      }
-    }
 
     let t = 0;
 
@@ -1320,9 +1291,6 @@ export default function FightReplay({
       if (!rounds[ri]) rounds[ri] = [];
       rounds[ri].push(entry);
     });
-
-    // We need the flat log index for comboRunLength lookup
-    let globalLogIdx = 0;
 
     rounds.forEach((entries, ri) => {
       // Determine first mover label for round header
@@ -1342,11 +1310,8 @@ export default function FightReplay({
       let localOffset = 0;
 
       entries.forEach((entry, hi) => {
-        const logIdx = globalLogIdx + hi;
         const isDouble = entry.isDoubleAttack;
         const isComboHit = entry.isCombo;
-        const isFirstComboHit = isComboHit && entry.comboStep === 1;
-        const runLen = comboRunLength[logIdx] as (2 | 3 | 4 | number);
 
         const hitLabel = isDouble
           ? "HIT 2"
@@ -1370,6 +1335,15 @@ export default function FightReplay({
               entry.hp1After,
               entry.hp2After
             );
+
+            // Combo label fires on the hit that EXTENDS the combo (comboStep >= 2).
+            // Label text = comboStep × so it reads "2×", "3×", "4×".
+            const step = entry.comboStep as number;
+            const labelId = ++comboLabelIdRef.current;
+            const side: "left" | "right" = entry.attacker === "p1" ? "left" : "right";
+            setComboLabel({ id: labelId, multiplier: Math.min(step, 4) as 2 | 3 | 4, side });
+            // Clear after animation completes (~400ms)
+            schedule(() => setComboLabel(null), 440);
           }, t + localOffset);
 
           const hitDuration = entry.isCrit ? HIT_DURATION_CRIT : HIT_DURATION_NORMAL;
@@ -1423,14 +1397,6 @@ export default function FightReplay({
               entry.hp2After
             );
 
-            // Show combo flash label on first hit of a combo burst
-            if (isFirstComboHit && runLen >= 2) {
-              const labelId = ++comboLabelIdRef.current;
-              const side: "left" | "right" = entry.attacker === "p1" ? "left" : "right";
-              setComboLabel({ id: labelId, multiplier: Math.min(runLen, 4) as 2 | 3 | 4, side });
-              // Clear after animation completes (~400ms)
-              schedule(() => setComboLabel(null), 440);
-            }
           }, t + localOffset + ANNOUNCE_DURATION);
 
           const hitDuration = entry.isCrit ? HIT_DURATION_CRIT : HIT_DURATION_NORMAL;
@@ -1447,7 +1413,6 @@ export default function FightReplay({
         }
       });
 
-      globalLogIdx += entries.length;
       t += localOffset + POST_ROUND_PAUSE;
     });
 
