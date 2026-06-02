@@ -7,7 +7,7 @@
 // Route: /training  (access directly — no nav link in production)
 // Branch: gameplay-changes
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import FightReplay from "@/components/FightReplay";
 import FightSummary from "@/components/FightSummary";
 import MatchupAnalysis from "./MatchupAnalysis";
@@ -215,6 +215,13 @@ export default function TrainingPage() {
   const used2 = Object.values(stats2).reduce((a, b) => a + b, 0);
   const bothReady = used1 === TOTAL_POINTS && used2 === TOTAL_POINTS;
 
+  // Live preview: auto-simulate whenever both sides have exactly 25 pts.
+  // useMemo keeps it pure — no side effects, no setState, just recomputes inline.
+  const previewResult = useMemo<FightResult | null>(() => {
+    if (!bothReady) return null;
+    return simulateFight(stats1, stats2);
+  }, [stats1, stats2, bothReady]);
+
   function startFight() {
     if (!bothReady) return;
     const result = simulateFight(stats1, stats2);
@@ -298,6 +305,33 @@ export default function TrainingPage() {
             {/* Live matchup analysis — updates as sliders move */}
             <MatchupAnalysis stats1={stats1} stats2={stats2} />
 
+            {/* Live fight preview — auto-simulates whenever both sides are at 25 pts */}
+            {bothReady && previewResult ? (
+              <div className="mb-4">
+                <div
+                  className="flex items-center justify-between mb-2 px-1"
+                >
+                  <span
+                    className="text-xs font-bold uppercase tracking-widest"
+                    style={{ color: "#b8860b" }}
+                  >
+                    Simulated Fight Preview
+                  </span>
+                  <span className="text-xs" style={{ color: "#4b3a28" }}>
+                    updates as you adjust stats
+                  </span>
+                </div>
+                <FightLog result={previewResult} />
+              </div>
+            ) : (
+              <div
+                className="rounded-lg p-3 mb-4 text-center text-xs"
+                style={{ background: "#15120a", border: "1px solid #2a2010", color: "#4b3a28" }}
+              >
+                Allocate all 25 points to preview fight
+              </div>
+            )}
+
             {/* Status / FIGHT button */}
             <div className="flex flex-col items-center gap-2">
               {/* Readiness indicators */}
@@ -345,6 +379,17 @@ export default function TrainingPage() {
         {/* ── Result step ────────────────────────────────────────────────── */}
         {step === "result" && fightResult && (
           <>
+            {/* HOME button — top of result page, resets to configure */}
+            <div className="mb-3">
+              <button
+                className="btn-secondary w-full"
+                onClick={resetToConfig}
+                style={{ fontSize: "0.8rem", letterSpacing: "0.12em", padding: "0.6rem" }}
+              >
+                ← HOME
+              </button>
+            </div>
+
             <FightSummary
               result={fightResult}
               p1Label="RED"
