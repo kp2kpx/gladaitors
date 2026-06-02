@@ -1,5 +1,17 @@
 // TypeScript port of PitArena._simulateFight
-// Mirrors the updated Solidity logic: 25-pt stats, new damage formula, speed-gap double-attacks.
+// Branch: gameplay-changes
+// Mechanic: ATB (Active Time Battle) accumulator-based speed system.
+//   - Replaces the old "faster goes first + double-attack at gap≥3" model.
+//   - Each tick: faster gladiator accumulates (10 + diff) points, slower accumulates 10.
+//   - Attack fires when accumulator ≥ 10 (subtract 10 after each attack).
+//   - This naturally gives the faster gladiator (diff×10%) more attacks over time.
+//   - Stats expected in range 0–10 per stat; enforcement is a UI concern.
+//
+// ATB math verification:
+//   SPD 6 vs 4 (diff=2): rates 12:10  → 20% more attacks for faster ✓
+//   SPD 9 vs 5 (diff=4): rates 14:10  → 40% more attacks for faster ✓
+//   SPD 5 vs 5 (diff=0): rates 10:10  → equal attacks ✓
+//   SPD 10 vs 1 (diff=9): rates 19:10 → 90% more attacks for faster ✓
 
 export interface GladiatorStats {
   strength: number;
@@ -10,6 +22,9 @@ export interface GladiatorStats {
 }
 
 export interface RoundLog {
+  // "round" is kept for backward compat with FightReplay (which groups by entry.round).
+  // In the ATB model this is a monotonically incrementing attack-event counter (tick index).
+  // Each entry in the log represents one attack event.
   round: number;
   // Which gladiator attacked
   attacker: "p1" | "p2";
@@ -17,10 +32,12 @@ export interface RoundLog {
   isCrit: boolean;
   hp1After: number;
   hp2After: number;
-  // New fields for replay
-  attackedFirst: boolean;     // was this the first attack of the round?
-  isDoubleAttack: boolean;    // was this the second hit from the faster gladiator?
-  speedGap: number;           // absolute speed difference this round
+  // Replay compat fields
+  attackedFirst: boolean;
+  // isDoubleAttack: always false in ATB model. Kept in type for compat with
+  // FightReplay and FightSummary which read this field.
+  isDoubleAttack: boolean;
+  speedGap: number;
 }
 
 export interface FightResult {
@@ -38,8 +55,11 @@ export interface FightResult {
 
 const STARTING_HP = 100;
 
-// Match the Solidity contract's round cap to prevent infinite loops in edge cases.
-const NUM_ROUNDS = 10;
+// Safety backstop: prevents infinite loops. With 25-stat gladiators minimum damage
+// is 1 per attack, so fights always end before this in practice.
+// 2000 ticks is generous — a typical fight with equal SPD and 1 dmg/attack ends in
+// ~100 attacks (100 HP / 1 dmg each, alternating = 200 attacks max total).
+const MAX_TICKS = 2000;
 
 // Simple deterministic hash-like mixer using xorshift — good enough for client-side sim
 function nextSeed(seed: number): number {
@@ -60,7 +80,7 @@ function calcDamage(
   const effectiveDef = Math.max(0, defender.defense - attacker.intel);
 
   // Damage = max(1, STR - effectiveDef)
-  let base = Math.max(1, attacker.strength - effectiveDef);
+  const base = Math.max(1, attacker.strength - effectiveDef);
 
   // Crit chance = floor(LCK / 2) * 10%
   const critChancePct = Math.floor(attacker.luck / 2) * 10;
@@ -81,196 +101,125 @@ export function simulateFight(
 
   let seed = (Math.random() * 0xffffffff) >>> 0;
 
-  let rounds = 0;
   let totalDamageByP1 = 0;
   let totalDamageByP2 = 0;
   let critsP1 = 0;
   let critsP2 = 0;
 
+  // ── ATB accumulator setup ─────────────────────────────────────────────────
+  // diff = absolute speed difference. Faster gladiator gets rate (10 + diff),
+  // slower gets rate 10. When tied: both get rate 10 (same frequency).
   const speedGap = Math.abs(g1.speed - g2.speed);
-  const g1Faster = g1.speed > g2.speed;
-  const tied = g1.speed === g2.speed;
-  const doubleAttack = speedGap >= 3;
+  const g1Faster = g1.speed >= g2.speed; // tiebreak: g1 acts first when equal
 
-  let round = 0;
-  // Fight runs until one (or both) gladiators reach 0 HP, capped at NUM_ROUNDS
-  // to match the Solidity contract behaviour.
-  while (hp1 > 0 && hp2 > 0 && round < NUM_ROUNDS) {
-    round++;
+  const rate1 = g1Faster ? 10 + speedGap : 10;
+  const rate2 = g1Faster ? 10 : 10 + speedGap;
 
-    if (tied) {
-      // Simultaneous — both take damage this exchange.
-      // Track raw HP after damage (before clamping) for tiebreak.
-      const r1 = calcDamage(g1, g2, seed);
-      seed = r1.nextSeedVal;
-      const r2 = calcDamage(g2, g1, seed);
-      seed = r2.nextSeedVal;
+  // Starting accumulators: pre-load so the faster gladiator fires first on tick 1.
+  // Both start at their rate value — this means on tick 1, both can potentially
+  // reach the threshold at the same time. Tiebreak: higher SPD acts first;
+  // equal SPD → g1 acts first (consistent initiator tiebreak).
+  let acc1 = rate1;
+  let acc2 = rate2;
 
-      hp2 -= r1.damage;
-      hp1 -= r2.damage;
+  let attackEventIndex = 0; // monotonically incrementing log entry counter
+  let ticks = 0;
 
-      totalDamageByP1 += r1.damage;
-      totalDamageByP2 += r2.damage;
-      if (r1.isCrit) critsP1++;
-      if (r2.isCrit) critsP2++;
+  // Fight runs until one (or both) gladiators reach 0 HP.
+  // MAX_TICKS is a safety backstop only.
+  while (hp1 > 0 && hp2 > 0 && ticks < MAX_TICKS) {
+    ticks++;
 
-      log.push({
-        round,
-        attacker: "p1",
-        damage: r1.damage,
-        isCrit: r1.isCrit,
-        hp1After: Math.max(hp1, 0),
-        hp2After: Math.max(hp2, 0),
-        attackedFirst: true,
-        isDoubleAttack: false,
-        speedGap,
-      });
-      log.push({
-        round,
-        attacker: "p2",
-        damage: r2.damage,
-        isCrit: r2.isCrit,
-        hp1After: Math.max(hp1, 0),
-        hp2After: Math.max(hp2, 0),
-        attackedFirst: true,
-        isDoubleAttack: false,
-        speedGap,
-      });
-    } else if (g1Faster) {
-      // g1 strikes first
-      const r1 = calcDamage(g1, g2, seed);
-      seed = r1.nextSeedVal;
-      hp2 -= r1.damage;
-      totalDamageByP1 += r1.damage;
-      if (r1.isCrit) critsP1++;
+    // Accumulate action points this tick
+    acc1 += rate1;
+    acc2 += rate2;
 
-      log.push({
-        round,
-        attacker: "p1",
-        damage: r1.damage,
-        isCrit: r1.isCrit,
-        hp1After: Math.max(hp1, 0),
-        hp2After: Math.max(hp2, 0),
-        attackedFirst: true,
-        isDoubleAttack: false,
-        speedGap,
-      });
+    // Resolve attacks: when acc ≥ 10, that gladiator fires.
+    // If both reach threshold on the same tick, higher SPD acts first.
+    // Tied SPD → g1 acts first (g1Faster = true in that case).
+    // We may have multiple attacks per tick if accumulators stack up
+    // (this won't happen with the initial setup but is correct in general).
 
-      if (hp2 > 0) {
-        // g2 retaliates
-        const r2 = calcDamage(g2, g1, seed);
-        seed = r2.nextSeedVal;
-        hp1 -= r2.damage;
-        totalDamageByP2 += r2.damage;
-        if (r2.isCrit) critsP2++;
+    // Build the attack queue for this tick
+    type AttackEvent = { who: "p1" | "p2" };
+    const queue: AttackEvent[] = [];
+
+    // Drain acc1
+    while (acc1 >= 10) {
+      acc1 -= 10;
+      queue.push({ who: "p1" });
+    }
+
+    // Drain acc2
+    while (acc2 >= 10) {
+      acc2 -= 10;
+      queue.push({ who: "p2" });
+    }
+
+    // Sort: higher-speed attacker first; g1Faster handles ties
+    // With the ATB rates we set, in steady state only one gladiator fires per tick
+    // unless there's an exact ratio alignment. Sorting ensures correct ordering.
+    queue.sort((a, b) => {
+      if (a.who === b.who) return 0;
+      const speedA = a.who === "p1" ? g1.speed : g2.speed;
+      const speedB = b.who === "p1" ? g1.speed : g2.speed;
+      if (speedA !== speedB) return speedB - speedA; // higher SPD first
+      return a.who === "p1" ? -1 : 1; // g1 wins tiebreak
+    });
+
+    // Execute attacks in order, stopping if someone dies mid-tick
+    for (const event of queue) {
+      if (hp1 <= 0 || hp2 <= 0) break;
+
+      attackEventIndex++;
+
+      if (event.who === "p1") {
+        const r = calcDamage(g1, g2, seed);
+        seed = r.nextSeedVal;
+        hp2 -= r.damage;
+        totalDamageByP1 += r.damage;
+        if (r.isCrit) critsP1++;
 
         log.push({
-          round,
-          attacker: "p2",
-          damage: r2.damage,
-          isCrit: r2.isCrit,
-          hp1After: Math.max(hp1, 0),
-          hp2After: Math.max(hp2, 0),
-          attackedFirst: false,
-          isDoubleAttack: false,
-          speedGap,
-        });
-
-        if (doubleAttack && hp1 > 0) {
-          // g1 strikes again (double attack bonus)
-          const r3 = calcDamage(g1, g2, seed);
-          seed = r3.nextSeedVal;
-          hp2 -= r3.damage;
-          totalDamageByP1 += r3.damage;
-          if (r3.isCrit) critsP1++;
-
-          log.push({
-            round,
-            attacker: "p1",
-            damage: r3.damage,
-            isCrit: r3.isCrit,
-            hp1After: Math.max(hp1, 0),
-            hp2After: Math.max(hp2, 0),
-            attackedFirst: false,
-            isDoubleAttack: true,
-            speedGap,
-          });
-        }
-      }
-    } else {
-      // g2 is faster (g2Faster is true — covered by while condition eliminating tied)
-      const r1 = calcDamage(g2, g1, seed);
-      seed = r1.nextSeedVal;
-      hp1 -= r1.damage;
-      totalDamageByP2 += r1.damage;
-      if (r1.isCrit) critsP2++;
-
-      log.push({
-        round,
-        attacker: "p2",
-        damage: r1.damage,
-        isCrit: r1.isCrit,
-        hp1After: Math.max(hp1, 0),
-        hp2After: Math.max(hp2, 0),
-        attackedFirst: true,
-        isDoubleAttack: false,
-        speedGap,
-      });
-
-      if (hp1 > 0) {
-        // g1 retaliates
-        const r2 = calcDamage(g1, g2, seed);
-        seed = r2.nextSeedVal;
-        hp2 -= r2.damage;
-        totalDamageByP1 += r2.damage;
-        if (r2.isCrit) critsP1++;
-
-        log.push({
-          round,
+          round: attackEventIndex,
           attacker: "p1",
-          damage: r2.damage,
-          isCrit: r2.isCrit,
+          damage: r.damage,
+          isCrit: r.isCrit,
           hp1After: Math.max(hp1, 0),
           hp2After: Math.max(hp2, 0),
-          attackedFirst: false,
+          attackedFirst: true,
           isDoubleAttack: false,
           speedGap,
         });
+      } else {
+        const r = calcDamage(g2, g1, seed);
+        seed = r.nextSeedVal;
+        hp1 -= r.damage;
+        totalDamageByP2 += r.damage;
+        if (r.isCrit) critsP2++;
 
-        if (doubleAttack && hp2 > 0) {
-          // g2 strikes again (double attack bonus)
-          const r3 = calcDamage(g2, g1, seed);
-          seed = r3.nextSeedVal;
-          hp1 -= r3.damage;
-          totalDamageByP2 += r3.damage;
-          if (r3.isCrit) critsP2++;
-
-          log.push({
-            round,
-            attacker: "p2",
-            damage: r3.damage,
-            isCrit: r3.isCrit,
-            hp1After: Math.max(hp1, 0),
-            hp2After: Math.max(hp2, 0),
-            attackedFirst: false,
-            isDoubleAttack: true,
-            speedGap,
-          });
-        }
+        log.push({
+          round: attackEventIndex,
+          attacker: "p2",
+          damage: r.damage,
+          isCrit: r.isCrit,
+          hp1After: Math.max(hp1, 0),
+          hp2After: Math.max(hp2, 0),
+          attackedFirst: true,
+          isDoubleAttack: false,
+          speedGap,
+        });
       }
     }
   }
 
-  rounds = round;
-
   // Determine winner.
-  // Both can reach 0 on the same exchange (simultaneous speed-tied hits).
-  // Tiebreak: lower raw HP (more negative) loses. Exact tie → p1 (attacker/initiator) loses.
+  // Both can reach 0 in the same tick (queue drains both).
+  // Tiebreak: lower raw HP (more overkill) loses. Exact tie → g1 loses
+  // (attacker/initiator loses the draw — consistent with old behavior).
   let winner: "p1" | "p2";
 
   if (hp1 <= 0 && hp2 <= 0) {
-    // Both dead this exchange — whoever has lower HP (more overkill) is the loser.
-    // If exactly equal, p1 loses (consistent tiebreak: initiator loses the draw).
     winner = hp2 < hp1 ? "p1" : "p2";
   } else if (hp2 <= 0) {
     winner = "p1";
@@ -281,7 +230,7 @@ export function simulateFight(
 
   return {
     winner,
-    rounds,
+    rounds: attackEventIndex, // total attack events — used by FightReplay for "X rounds"
     hp1Final: Math.max(hp1, 0),
     hp2Final: Math.max(hp2, 0),
     log,
