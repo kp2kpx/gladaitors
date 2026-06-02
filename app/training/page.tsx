@@ -240,8 +240,8 @@ export default function TrainingPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
-      style={{ background: "#0d0b08", color: "#e8dcc8" }}
+      className="arena-bg min-h-screen flex flex-col"
+      style={{ color: "#1a1208" }}
     >
       {/* Header bar */}
       <div
