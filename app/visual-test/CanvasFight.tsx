@@ -5,14 +5,14 @@
 // No Phaser, no game libraries — vanilla JS canvas inside a React component.
 // Dynamically imported (ssr: false) from visual-test/page.tsx.
 //
-// Characters are rendered from the 10 inline SVG designs in FightReplay.tsx
-// (same 80×96 viewBox). Each SVG is serialised to a data URL and drawn via
-// ctx.drawImage().  P2 is horizontally flipped with ctx.scale(-1, 1).
+// Characters are rendered from real pixel art sprite sheets in /public/characters/.
+// Each animation (idle/attack/hit/death) is a horizontal strip of 8 frames,
+// each frame 106px wide × 1186px tall (sheet: 848 × 1186).
 //
-// Color → character mapping:
-//   red  → Maximus  (Roman sword & shield, crimson/gold)
-//   blue → Spartax  (Greek spear warrior, royal blue/silver)
-//   gold → Gruk     (Axe berserker, iron/dark brown)
+// Color → sprite folder mapping:
+//   red  → /characters/red/   (Maximus)
+//   blue → /characters/blue/  (Spartax)
+//   gold → /characters/blue/  (Gruk — uses blue sheet with golden CSS filter tint)
 
 import { useEffect, useRef } from "react";
 import type { FightResult, RoundLog } from "@/lib/fight-engine";
@@ -26,90 +26,52 @@ interface CanvasFightProps {
   onDone: () => void;
 }
 
-// ── SVG character bodies (extracted from FightReplay.tsx) ─────────────────────
-// viewBox="0 0 80 96" — all characters face RIGHT by default.
-// Wrapped in a full <svg> tag before being turned into a data URL.
+// ── Sprite sheet constants ────────────────────────────────────────────────────
 
-const SVG_CHAR_BODIES: Record<string, string> = {
-  Maximus: `<path d="M28 3 Q40 -1 52 3 Q47 11 40 9 Q33 11 28 3Z" fill="#dc2626" />
-      <ellipse cx="40" cy="17" rx="14" ry="13" fill="#d97706" />
-      <rect x="30" y="15" width="20" height="9" rx="2" fill="#1c1917" />
-      <rect x="32" y="18" width="5" height="2" rx="1" fill="#fbbf24" />
-      <rect x="43" y="18" width="5" height="2" rx="1" fill="#fbbf24" />
-      <rect x="37" y="29" width="6" height="5" rx="1" fill="#b45309" />
-      <ellipse cx="14" cy="52" rx="10" ry="14" fill="#b8860b" stroke="#8b6914" stroke-width="1" />
-      <ellipse cx="14" cy="52" rx="7" ry="10" fill="#8b1a1a" />
-      <circle cx="14" cy="52" r="2.5" fill="#d97706" />
-      <path d="M22 34 L58 34 L60 65 L20 65Z" fill="#dc2626" />
-      <path d="M22 34 L58 34 L56 47 L24 47Z" fill="#b91c1c" />
-      <rect x="11" y="36" width="14" height="7" rx="3.5" fill="#dc2626" />
-      <rect x="55" y="34" width="14" height="7" rx="3.5" fill="#dc2626" />
-      <rect x="67" y="19" width="3" height="36" rx="1.5" fill="#d1d5db" />
-      <rect x="62" y="31" width="12" height="3" rx="1" fill="#d97706" />
-      <rect x="68" y="15" width="2" height="8" rx="1" fill="#f3f4f6" />
-      <rect x="22" y="62" width="36" height="5" rx="1" fill="#b8860b" />
-      <rect x="24" y="65" width="12" height="22" rx="2" fill="#991b1b" />
-      <rect x="44" y="65" width="12" height="22" rx="2" fill="#991b1b" />
-      <rect x="22" y="81" width="16" height="7" rx="2" fill="#78350f" />
-      <rect x="42" y="81" width="16" height="7" rx="2" fill="#78350f" />`,
+const SPRITE_FRAME_W = 106;   // px per frame (848 / 8)
+const SPRITE_FRAME_H = 1186;  // full sheet height
+const SPRITE_FRAMES  = 8;     // frames per animation
 
-  Spartax: `<polygon points="40,1 48,8 40,12 32,8" fill="#94a3b8" />
-      <ellipse cx="40" cy="18" rx="13" ry="13" fill="#2563eb" />
-      <path d="M27 15 Q40 10 53 15 L53 24 Q40 20 27 24Z" fill="#1d4ed8" />
-      <rect x="33" y="17" width="14" height="7" rx="2" fill="#0f172a" />
-      <rect x="35" y="20" width="4" height="2" rx="1" fill="#bfdbfe" />
-      <rect x="41" y="20" width="4" height="2" rx="1" fill="#bfdbfe" />
-      <rect x="37" y="30" width="6" height="4" rx="1" fill="#1e40af" />
-      <path d="M24 34 L56 34 L58 65 L22 65Z" fill="#2563eb" />
-      <rect x="24" y="34" width="32" height="10" fill="#1d4ed8" />
-      <ellipse cx="16" cy="50" rx="9" ry="12" fill="#94a3b8" stroke="#64748b" stroke-width="1" />
-      <circle cx="16" cy="50" r="3" fill="#2563eb" />
-      <rect x="12" y="36" width="13" height="6" rx="3" fill="#2563eb" />
-      <rect x="55" y="33" width="13" height="6" rx="3" fill="#2563eb" />
-      <rect x="65" y="1" width="3" height="56" rx="1.5" fill="#94a3b8" />
-      <polygon points="65,1 68,1 66.5,-6" fill="#e2e8f0" />
-      <rect x="22" y="63" width="36" height="4" rx="1" fill="#1e40af" />
-      <rect x="25" y="66" width="11" height="22" rx="2" fill="#1e3a8a" />
-      <rect x="44" y="66" width="11" height="22" rx="2" fill="#1e3a8a" />
-      <rect x="23" y="81" width="15" height="7" rx="2" fill="#0f172a" />
-      <rect x="42" y="81" width="15" height="7" rx="2" fill="#0f172a" />`,
+type AnimName = "idle" | "attack" | "hit" | "death";
 
-  Gruk: `<path d="M30 8 Q33 3 36 6 Q38 1 40 4 Q42 1 44 6 Q47 3 50 8 Q45 12 40 10 Q35 12 30 8Z" fill="#6b7280" />
-      <ellipse cx="40" cy="19" rx="15" ry="13" fill="#44403c" />
-      <rect x="31" y="17" width="18" height="8" rx="1" fill="#1c1917" />
-      <rect x="33" y="20" width="4" height="3" rx="1" fill="#ef4444" />
-      <rect x="43" y="20" width="4" height="3" rx="1" fill="#ef4444" />
-      <path d="M28 16 L32 17 L30 22 L28 16Z" fill="#6b7280" />
-      <path d="M52 16 L48 17 L50 22 L52 16Z" fill="#6b7280" />
-      <rect x="36" y="31" width="8" height="5" rx="1" fill="#292524" />
-      <path d="M18 35 L62 35 L65 66 L15 66Z" fill="#292524" />
-      <path d="M18 35 L62 35 L60 50 L20 50Z" fill="#1c1917" />
-      <rect x="12" y="36" width="16" height="8" rx="4" fill="#44403c" />
-      <rect x="52" y="34" width="16" height="8" rx="4" fill="#44403c" />
-      <rect x="66" y="20" width="4" height="48" rx="2" fill="#78350f" />
-      <path d="M62 18 Q66 10 74 14 Q74 28 66 28 Z" fill="#9ca3af" stroke="#6b7280" stroke-width="0.5" />
-      <path d="M62 34 Q66 42 74 38 Q74 24 66 24 Z" fill="#9ca3af" stroke="#6b7280" stroke-width="0.5" />
-      <rect x="15" y="64" width="50" height="5" rx="1" fill="#78350f" />
-      <rect x="22" y="67" width="14" height="22" rx="2" fill="#292524" />
-      <rect x="44" y="67" width="14" height="22" rx="2" fill="#292524" />
-      <rect x="20" y="82" width="18" height="7" rx="2" fill="#1c1917" />
-      <rect x="42" y="82" width="18" height="7" rx="2" fill="#1c1917" />`,
-};
-
-// Map FighterColor → character name
-const COLOR_TO_CHAR: Record<FighterColor, string> = {
-  red:  "Maximus",
-  blue: "Spartax",
-  gold: "Gruk",
-};
-
-// Build a data URL from an SVG body string
-function svgToDataUrl(charName: string): string {
-  const body = SVG_CHAR_BODIES[charName] ?? SVG_CHAR_BODIES["Maximus"];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 96">${body}</svg>`;
-  // Use encodeURIComponent-based approach for full Unicode safety
-  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+// Map fighter state → animation name
+function stateToAnim(state: FighterState): AnimName {
+  if (state === "walk")   return "idle";
+  if (state === "attack") return "attack";
+  if (state === "hit")    return "hit";
+  if (state === "death")  return "death";
+  return "idle";
 }
+
+// Folder for each color (gold reuses blue)
+const COLOR_TO_FOLDER: Record<FighterColor, string> = {
+  red:  "red",
+  blue: "blue",
+  gold: "blue",
+};
+
+// CSS filter tint for gold (sepia+saturate gives warm amber-gold look)
+const COLOR_TO_FILTER: Record<FighterColor, string | null> = {
+  red:  null,
+  blue: null,
+  gold: "sepia(1) saturate(4) hue-rotate(10deg) brightness(1.1)",
+};
+
+// Animation playback FPS per state
+const ANIM_FPS: Record<AnimName, number> = {
+  idle:   8,
+  attack: 16,
+  hit:    16,
+  death:  8,
+};
+
+// Whether an animation loops
+const ANIM_LOOPS: Record<AnimName, boolean> = {
+  idle:   true,
+  attack: false,
+  hit:    false,
+  death:  false,
+};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -117,24 +79,27 @@ const W = 480;
 const H = 240;
 const FLOOR_Y = 188;
 
-// Character sprite dimensions (drawn at 2× the 80×96 viewBox)
-const CHAR_W = 80;
-const CHAR_H = 96;
+// Character render width on canvas. Aspect ratio is 106:1186 = 0.089.
+// At CHAR_W=52, height = 52 * (1186/106) = ~582px — most clips above canvas top.
+// Feet land at FLOOR_Y, so we see roughly the lower ~180px of the 582px render.
+// This shows legs, torso, weapons — the interesting part.
+const CHAR_W = 52;
+const CHAR_H = CHAR_W * (SPRITE_FRAME_H / SPRITE_FRAME_W); // ≈ 582px
 
-const FIGHT_GAP = 110; // center-to-center distance when fighters are "in range"
+const FIGHT_GAP = 110;
 const HP_BAR_W = 180;
 const HP_BAR_H = 12;
 const HP_BAR_Y = 16;
 
 // Timings (ms)
-const ATTACK_LUNGE_MS = 80;
+const ATTACK_LUNGE_MS  = 80;
 const ATTACK_RETRACT_MS = 80;
-const HIT_FLASH_MS = 100;
+const HIT_FLASH_MS     = 100;
 const HIT_KNOCKBACK_MS = 80;
-const NORMAL_GAP_MS = 140;
-const COMBO_GAP_MS = 20;
-const DEATH_MS = 500;
-const POST_DEATH_MS = 600;
+const NORMAL_GAP_MS    = 140;
+const COMBO_GAP_MS     = 20;
+const DEATH_MS         = 500;
+const POST_DEATH_MS    = 600;
 
 // ── VFX types ─────────────────────────────────────────────────────────────────
 
@@ -182,6 +147,10 @@ interface Fighter {
   alive: boolean;
 }
 
+// ── Sprite image cache key: "{folder}/{anim}" ─────────────────────────────────
+
+type SpriteKey = string; // e.g. "red/idle"
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function CanvasFight({ result, p1Color, p2Color, onDone }: CanvasFightProps) {
@@ -197,31 +166,61 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     doneCalledRef.current = false;
 
-    // ── Preload character images ───────────────────────────────────────────
-    // Load one image per unique character needed (p1 and p2 may be same)
-    const charNames = [COLOR_TO_CHAR[p1Color], COLOR_TO_CHAR[p2Color]];
-    const uniqueNames = Array.from(new Set(charNames));
-    const charImages: Record<string, HTMLImageElement> = {};
+    // ── Preload all sprite images ──────────────────────────────────────────
+    const anims: AnimName[] = ["idle", "attack", "hit", "death"];
+    const foldersNeeded = Array.from(new Set([
+      COLOR_TO_FOLDER[p1Color],
+      COLOR_TO_FOLDER[p2Color],
+    ]));
+
+    const spriteImages: Record<SpriteKey, HTMLImageElement> = {};
+    const totalImages = foldersNeeded.length * anims.length;
     let loadedCount = 0;
     let started = false;
 
     function tryStart() {
       loadedCount++;
-      if (loadedCount >= uniqueNames.length && !started) {
+      if (loadedCount >= totalImages && !started) {
         started = true;
         startAnimation();
       }
     }
 
-    for (const name of uniqueNames) {
-      const img = new window.Image();
-      img.onload = tryStart;
-      img.onerror = tryStart; // degrade gracefully if SVG fails
-      img.src = svgToDataUrl(name);
-      charImages[name] = img;
+    for (const folder of foldersNeeded) {
+      for (const anim of anims) {
+        const key: SpriteKey = `${folder}/${anim}`;
+        const img = new window.Image();
+        img.onload = tryStart;
+        img.onerror = tryStart; // degrade gracefully
+        img.src = `/characters/${folder}/${anim}.png`;
+        spriteImages[key] = img;
+      }
     }
 
-    // ── State ────────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    function getSpriteImage(color: FighterColor, anim: AnimName): HTMLImageElement | null {
+      const folder = COLOR_TO_FOLDER[color];
+      const key: SpriteKey = `${folder}/${anim}`;
+      return spriteImages[key] ?? null;
+    }
+
+    function getFrameIndex(f: Fighter, now: number): number {
+      const anim = stateToAnim(f.state);
+      const fps = ANIM_FPS[anim];
+      const loops = ANIM_LOOPS[anim];
+      const elapsed = now - f.stateStart;
+      const totalFrames = SPRITE_FRAMES;
+      const frameDuration = 1000 / fps;
+      const rawFrame = Math.floor(elapsed / frameDuration);
+      if (loops) {
+        return rawFrame % totalFrames;
+      } else {
+        return Math.min(rawFrame, totalFrames - 1);
+      }
+    }
+
+    // ── State ─────────────────────────────────────────────────────────────────
 
     const p1: Fighter = {
       x: 80,
@@ -272,7 +271,6 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     let phase: Phase = "intro";
     let phaseStart = 0;
     let nextHitAt = 0;
-    let attackAnimDone = 0;
 
     const crowd = Array.from({ length: 14 }, () => ({
       x: 50 + Math.random() * 380,
@@ -335,19 +333,27 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     function drawFighter(f: Fighter, now: number) {
       const cx = fightX(f);
-      let charY = f.y;
-      const charName = COLOR_TO_CHAR[f.color];
-      const img = charImages[charName];
+      const anim = stateToAnim(f.state);
+      const frameIdx = getFrameIndex(f, now);
+      const img = getSpriteImage(f.color, anim);
+      const filter = COLOR_TO_FILTER[f.color];
 
-      // Idle bob
-      if (f.state === "idle") {
-        const elapsed = now - f.stateStart;
-        charY += Math.sin((elapsed / 1000) * Math.PI * 2) * 2;
-      }
+      // Destination rect: feet at FLOOR_Y
+      const destX = cx - CHAR_W / 2;
+      const destY = FLOOR_Y - CHAR_H;
+      const destW = CHAR_W;
+      const destH = CHAR_H;
+
+      // Source rect: one frame from the horizontal strip
+      const srcX = frameIdx * SPRITE_FRAME_W;
+      const srcY = 0;
+      const srcW = SPRITE_FRAME_W;
+      const srcH = SPRITE_FRAME_H;
 
       ctx.save();
       ctx.globalAlpha = f.state === "death" ? f.deathOpacity : 1;
 
+      // Death: rotate the fighter to fall sideways
       if (f.state === "death") {
         const pivotX = cx;
         const pivotY = FLOOR_Y;
@@ -357,38 +363,44 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         ctx.translate(-pivotX, -pivotY);
       }
 
-      // Hit flash: white overlay drawn before character
+      // Hit flash: white rect overlay (skip sprite draw)
       if (f.state === "hit") {
         const elapsed = now - f.stateStart;
         if (elapsed < HIT_FLASH_MS) {
           ctx.fillStyle = "rgba(255,255,255,0.85)";
-          ctx.fillRect(cx - CHAR_W / 2, charY, CHAR_W, CHAR_H);
+          ctx.fillRect(destX, destY + destH * 0.55, destW, destH * 0.45);
           ctx.restore();
           return;
         }
       }
 
-      // Draw SVG character sprite
+      // Apply golden tint filter if needed
+      if (filter) {
+        ctx.filter = filter;
+      }
+
       if (img && img.complete && img.naturalWidth > 0) {
         if (f.side === "p2") {
-          // Flip horizontally around the center x of the character
+          // Flip P2 horizontally around their center X
           ctx.translate(cx + CHAR_W / 2, 0);
           ctx.scale(-1, 1);
-          ctx.drawImage(img, 0, charY, CHAR_W, CHAR_H);
+          ctx.drawImage(img, srcX, srcY, srcW, srcH, -CHAR_W / 2, destY, destW, destH);
         } else {
-          ctx.drawImage(img, cx - CHAR_W / 2, charY, CHAR_W, CHAR_H);
+          ctx.drawImage(img, srcX, srcY, srcW, srcH, destX, destY, destW, destH);
         }
       } else {
-        // Fallback: simple colored rectangle if image not ready
+        // Fallback: colored rectangle while image loads
+        if (filter) ctx.filter = "none";
         const fallbackColors: Record<FighterColor, string> = {
-          red: "#c47070",
+          red:  "#c47070",
           blue: "#6090c8",
           gold: "#b8860b",
         };
         ctx.fillStyle = fallbackColors[f.color];
-        ctx.fillRect(cx - CHAR_W / 2, charY, CHAR_W, CHAR_H);
+        ctx.fillRect(destX, destY + destH * 0.6, destW, destH * 0.4);
       }
 
+      ctx.filter = "none";
       ctx.restore();
     }
 
@@ -517,7 +529,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         case "hit": {
           const knockDuration = HIT_KNOCKBACK_MS * 2;
           if (elapsed < HIT_FLASH_MS) {
-            // flash — no movement
+            // flash phase — no movement
           } else if (elapsed < HIT_FLASH_MS + HIT_KNOCKBACK_MS) {
             const t = (elapsed - HIT_FLASH_MS) / HIT_KNOCKBACK_MS;
             f.knockOffset = f.knockDir * 15 * t;
@@ -538,7 +550,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           break;
         }
         case "idle": {
-          // bob handled in draw
+          // animation handled by getFrameIndex
           break;
         }
       }
@@ -590,9 +602,10 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           attacker.stateStart = now;
 
           setTimeout(() => {
-            triggerHit(defender, performance.now());
-            spawnSlash(attacker, defender, entry.isCrit, entry.isCombo && entry.comboStep >= 2, performance.now());
-            spawnDamageNum(defender, entry.damage, entry.isCrit, performance.now());
+            const perfNow = performance.now();
+            triggerHit(defender, perfNow);
+            spawnSlash(attacker, defender, entry.isCrit, entry.isCombo && entry.comboStep >= 2, perfNow);
+            spawnDamageNum(defender, entry.damage, entry.isCrit, perfNow);
             p1.hpTarget = entry.hp1After;
             p2.hpTarget = entry.hp2After;
 
