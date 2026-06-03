@@ -56,7 +56,7 @@ export interface RoundLog {
 }
 
 export interface FightResult {
-  winner: "p1" | "p2";
+  winner: "p1" | "p2" | "draw";
   rounds: number;
   hp1Final: number;
   hp2Final: number;
@@ -325,13 +325,12 @@ export function simulateFight(
   }
 
   // Determine winner.
-  // Both can reach 0 in the same tick (queue drains both).
-  // Tiebreak: lower raw HP (more overkill) loses. Exact tie → g1 loses
-  // (attacker/initiator loses the draw — consistent with old behavior).
-  let winner: "p1" | "p2";
+  // Both can reach 0 in the same tick (queue drains both) = simultaneous kill = draw.
+  // Single-side 0 = that side lost.
+  let winner: "p1" | "p2" | "draw";
 
   if (hp1 <= 0 && hp2 <= 0) {
-    winner = hp2 < hp1 ? "p1" : "p2";
+    winner = "draw";
   } else if (hp2 <= 0) {
     winner = "p1";
   } else {
