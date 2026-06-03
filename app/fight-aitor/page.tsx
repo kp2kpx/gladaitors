@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -11,8 +11,10 @@ import FightSummary from "@/components/FightSummary";
 import { simulateFight, FightResult } from "@/lib/fight-engine";
 import { GladiatorStats, TOTAL_POINTS, STAT_LABELS } from "@/lib/contract";
 import { useFarcasterAuth } from "@/lib/useFarcasterAuth";
+import sdk from "@farcaster/miniapp-sdk";
+import sdk from "@farcaster/miniapp-sdk";
 
-// Aitor — Easy difficulty. 25 pts. STR:6 SPD:5 DEF:5 INT:5 LCK:4
+// Aitor â€” Easy difficulty. 25 pts. STR:6 SPD:5 DEF:5 INT:5 LCK:4
 const AITOR_STATS: GladiatorStats = {
   strength: 6,
   speed: 5,
@@ -114,18 +116,23 @@ export default function FightAitor() {
   async function handleShare() {
     if (sharedPoints || !fightResult) return;
     const playerWon = fightResult.winner === "p1";
-    const outcome = playerWon ? "WON" : "LOST";
-    const shareText = encodeURIComponent(
-      `I just fought AITOR the bot in GLADAITOR ⚔️ ${outcome}. Can you beat him? gladaitors.vercel.app`
-    );
-    window.open(
-      `https://warpcast.com/~/compose?text=${shareText}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    const miniAppUrl = "https://gladaitors.vercel.app";
+    const opponentName = "AITOR";
+    const shareText = playerWon
+      ? `Just defeated ${opponentName} in GLADAITORS ⚔️ ${Math.round(fightResult.totalDamageByP1)} pts — ${miniAppUrl}`
+      : `Lost to ${opponentName} in GLADAITORS — rematch incoming ⚔️ ${miniAppUrl}`;
+
+    try {
+      await sdk.actions.composeCast({ text: shareText });
+    } catch {
+      window.open(
+        `https://farcaster.xyz/~/compose?text=${encodeURIComponent(shareText)}`,
+        "_blank",
+        "noopener,noreferrer"
+      );
+    }
 
     if (playerId) {
-      // Build a stable match ID for dedup — use playerId slug + timestamp
       const playerSlug = playerId.startsWith("fid:")
         ? playerId.slice(4)
         : playerId.slice(2, 10);
@@ -143,11 +150,11 @@ export default function FightAitor() {
     }
   }
 
-  // ── CONFIGURE ──────────────────────────────────────────────────────────────
+  // â”€â”€ CONFIGURE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (step === "configure") {
     return (
       <div className="arena-bg min-h-screen flex flex-col">
-        <Navbar><WalletButton /></Navbar>
+        <Navbar showBack><WalletButton /></Navbar>
 
         <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
           {/* Aitor profile card */}
@@ -166,7 +173,7 @@ export default function FightAitor() {
                   Forged in the digital arena. Undefeated until you.
                 </p>
               </div>
-              <div className="text-3xl">🤖</div>
+              <div className="text-3xl">ðŸ¤–</div>
             </div>
 
             <div className="mt-4 space-y-1.5">
@@ -236,11 +243,11 @@ export default function FightAitor() {
     );
   }
 
-  // ── REPLAY ─────────────────────────────────────────────────────────────────
+  // â”€â”€ REPLAY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (step === "replay" && fightResult) {
     return (
       <div className="arena-bg min-h-screen flex flex-col">
-        <Navbar><WalletButton /></Navbar>
+        <Navbar showProfile={false}><WalletButton /></Navbar>
 
         <main className="flex-1 flex items-center justify-center px-4 py-8">
           <div className="w-full max-w-sm">
@@ -263,13 +270,13 @@ export default function FightAitor() {
     );
   }
 
-  // ── RESULT ─────────────────────────────────────────────────────────────────
+  // â”€â”€ RESULT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (step === "result" && fightResult) {
     const playerWon = fightResult.winner === "p1";
 
     return (
       <div className="arena-bg min-h-screen flex flex-col">
-        <Navbar><WalletButton /></Navbar>
+        <Navbar showBack><WalletButton /></Navbar>
 
         <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8">
           <FightSummary
@@ -300,7 +307,7 @@ export default function FightAitor() {
               </span>
             }
           />
-          <div className="mt-2 text-xs text-gray-600 text-center">BOT FIGHT — no USDC at stake</div>
+          <div className="mt-2 text-xs text-gray-600 text-center">BOT FIGHT â€” no USDC at stake</div>
         </main>
         <Footer />
       </div>
@@ -309,3 +316,4 @@ export default function FightAitor() {
 
   return null;
 }
+
