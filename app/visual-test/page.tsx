@@ -51,10 +51,10 @@ const STAT_FULL: Record<keyof GladiatorStats, string> = {
 
 // ── Character options ─────────────────────────────────────────────────────────
 
-const CHARACTER_OPTIONS: { id: FighterColor; label: string; color: string }[] = [
-  { id: "red",  label: "R", color: "#dc2626" },
-  { id: "blue", label: "B", color: "#3b82f6" },
-  { id: "gold", label: "G", color: "#d4a853" },
+const CHARACTER_OPTIONS: { id: FighterColor; label: string; sublabel: string; color: string }[] = [
+  { id: "red",  label: "MAX", sublabel: "Maximus", color: "#dc2626" },
+  { id: "blue", label: "SPX", sublabel: "Spartax", color: "#3b82f6" },
+  { id: "gold", label: "GRK", sublabel: "Gruk",    color: "#d4a853" },
 ];
 
 // ── Stat allocator ────────────────────────────────────────────────────────────
@@ -166,22 +166,29 @@ function CharPicker({
             key={opt.id}
             onClick={() => onChange(opt.id)}
             style={{
-              width: 40,
-              height: 40,
-              background: opt.color,
-              border: selected ? "2px solid #ffffff" : "2px solid transparent",
+              width: 52,
+              height: 44,
+              background: selected ? opt.color : "#1a1408",
+              border: selected ? "2px solid #ffffff" : `2px solid ${opt.color}`,
               boxShadow: selected ? `0 0 10px ${opt.color}` : "none",
               borderRadius: "4px",
               cursor: "pointer",
               fontWeight: "bold",
-              fontSize: "0.75rem",
-              color: "#ffffff",
-              textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+              fontSize: "0.6rem",
+              color: selected ? "#ffffff" : opt.color,
+              textShadow: selected ? "0 1px 2px rgba(0,0,0,0.6)" : "none",
               transition: "all 0.1s ease",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              lineHeight: 1,
             }}
-            aria-label={`${opt.id} gladiator`}
+            aria-label={`${opt.sublabel} gladiator`}
           >
-            {opt.label}
+            <span style={{ fontSize: "0.65rem", fontWeight: 900, letterSpacing: "0.05em" }}>{opt.label}</span>
+            <span style={{ fontSize: "0.5rem", opacity: 0.8 }}>{opt.sublabel}</span>
           </button>
         );
       })}
@@ -234,18 +241,29 @@ function GladPanel({
       }}
     >
       <div className="flex flex-col items-center mb-3">
-        {/* Color swatch preview */}
+        {/* Character name badge */}
         <div
           style={{
-            width: 48,
+            width: 64,
             height: 64,
-            background: accentByColor[color],
-            borderRadius: "3px",
+            background: bgByColor[color],
+            borderRadius: "4px",
             border: `2px solid ${accent}`,
             marginBottom: 8,
-            opacity: 0.85,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
           }}
-        />
+        >
+          <span style={{ fontSize: "1.5rem", lineHeight: 1 }}>
+            {color === "red" ? "⚔" : color === "blue" ? "🏛" : "🪓"}
+          </span>
+          <span style={{ fontSize: "0.5rem", color: accent, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            {color === "red" ? "Maximus" : color === "blue" ? "Spartax" : "Gruk"}
+          </span>
+        </div>
         <span
           className="text-xs font-bold uppercase tracking-widest"
           style={{ color: accent }}
