@@ -69,24 +69,18 @@ const ANIM_LOOPS: Record<AnimName, boolean> = {
 
 // -- Canvas dimensions --------------------------------------------------------
 
-const W = 480;
-const H = 320;
-const FLOOR_Y = 268;
+const W = 800;
+const H = 400;
+const FLOOR_Y = Math.round(H * 0.88);  // 352px — feet near bottom
 
-// Character dimensions: CHAR_H must be large enough to show the full sprite.
-// The character art occupies ~88% of the 1186px frame height (Y~140 to Y~1185).
-// We need CHAR_H large enough so 88% of it shows meaningful character height.
-// At CHAR_H=240: character body appears ~210px tall = a proper visible gladiator.
-//
-// CHAR_W: the sprite's raw aspect ratio (106/1186 = 0.089) gives ~21px width at 240px height.
-// That's correct pixel art proportions but renders as a thin stick. We over-scale width
-// by ~5x to get a satisfying visual width while keeping the pixel art feel.
-// CHAR_W = 240 * 0.45 = 108px - wide enough to see, fits two fighters side by side.
-const CHAR_H = H * 0.75;           // 240px tall
-const CHAR_W = CHAR_H * 0.45;      // 108px wide (over-scaled for visual impact)
+// Character dimensions: 310px tall fills ~78% of 400px canvas height.
+// Source art crop is 106px wide x 950px content (Y=150-1100).
+// At CHAR_H=310, CHAR_W=102px keeps proportions close to source aspect ratio.
+const CHAR_H = 310;
+const CHAR_W = Math.round(CHAR_H * 0.33);  // ~102px wide
 
-const FIGHT_GAP = 160;
-const HP_BAR_W = 180;
+const FIGHT_GAP = 240;
+const HP_BAR_W = 240;
 const HP_BAR_H = 12;
 const HP_BAR_Y = 16;
 
@@ -108,7 +102,7 @@ const CRIT_GAP_MS       = 600;
 const DEATH_MS      = 1400;
 const POST_DEATH_MS = 1800;
 
-const SHAKE_MAG = 8;
+const SHAKE_MAG = 10;
 const SHAKE_DUR = 320;
 
 // -- VFX types ----------------------------------------------------------------
@@ -229,7 +223,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     // P1 starts left, P2 starts right - they walk toward each other
     const p1: Fighter = {
-      x: 60, baseX: 60, y: FLOOR_Y - CHAR_H,
+      x: 100, baseX: 100, y: FLOOR_Y - CHAR_H,
       state: "walk", stateStart: 0, attackDir: 1,
       lungeOffset: 0, knockOffset: 0, knockDir: -1,
       deathAngle: 0, deathOpacity: 1,
@@ -240,7 +234,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     };
 
     const p2: Fighter = {
-      x: 420, baseX: 420, y: FLOOR_Y - CHAR_H,
+      x: 700, baseX: 700, y: FLOOR_Y - CHAR_H,
       state: "walk", stateStart: 0, attackDir: -1,
       lungeOffset: 0, knockOffset: 0, knockDir: 1,
       deathAngle: 0, deathOpacity: 1,
@@ -288,9 +282,9 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     }
     const comboTexts: ComboText[] = [];
 
-    const crowd = Array.from({ length: 18 }, () => ({
-      x: 30 + Math.random() * 420,
-      y: 50 + Math.random() * 50,
+    const crowd = Array.from({ length: 28 }, () => ({
+      x: 40 + Math.random() * 720,
+      y: 40 + Math.random() * 60,
       r: 2.5 + Math.random() * 3,
       c: `rgba(${60 + Math.floor(Math.random() * 30)},${40 + Math.floor(Math.random() * 15)},${30 + Math.floor(Math.random() * 10)},${(0.25 + Math.random() * 0.2).toFixed(2)})`,
     }));
@@ -341,7 +335,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.fillRect(0, 0, W, H);
 
       // Center spotlight
-      const spotlight = ctx.createRadialGradient(W / 2, FLOOR_Y - 40, 0, W / 2, FLOOR_Y - 40, 160);
+      const spotlight = ctx.createRadialGradient(W / 2, FLOOR_Y - 40, 0, W / 2, FLOOR_Y - 40, 240);
       spotlight.addColorStop(0, "rgba(255, 240, 180, 0.08)");
       spotlight.addColorStop(1, "rgba(255, 240, 180, 0)");
       ctx.fillStyle = spotlight;
@@ -364,7 +358,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.globalAlpha = 0.15;
       ctx.strokeStyle = "#4a3a28";
       ctx.lineWidth = 1;
-      for (let i = 1; i <= 4; i++) {
+      for (let i = 1; i <= 5; i++) {
         ctx.beginPath();
         ctx.moveTo(0, FLOOR_Y + i * 9);
         ctx.lineTo(W, FLOOR_Y + i * 9);
@@ -477,12 +471,12 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.font = "bold 10px monospace";
       ctx.fillStyle = "#e8dcc8";
       ctx.textAlign = "left";
-      ctx.fillText("P1", 20, HP_BAR_Y - 3);
+      ctx.fillText("P1", 30, HP_BAR_Y - 3);
       ctx.fillStyle = "#1c1608";
       ctx.strokeStyle = "#2a2218";
       ctx.lineWidth = 1;
-      ctx.fillRect(20, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
-      ctx.strokeRect(20, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+      ctx.fillRect(30, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+      ctx.strokeRect(30, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp1w = Math.max(0, HP_BAR_W * p1.hpDisplay / 100);
       const hp1LowWarning = p1.hpDisplay < 25 ? Math.abs(Math.sin(now / 200)) : 1;
       const g1 = ctx.createLinearGradient(20, 0, 20 + HP_BAR_W, 0);
@@ -493,18 +487,18 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         g1.addColorStop(0, "#e05555"); g1.addColorStop(1, "#8b1a1a");
       }
       ctx.fillStyle = g1;
-      ctx.fillRect(20, HP_BAR_Y, hp1w, HP_BAR_H);
+      ctx.fillRect(30, HP_BAR_Y, hp1w, HP_BAR_H);
 
       ctx.fillStyle = "#e8dcc8";
       ctx.textAlign = "right";
-      ctx.fillText("P2", 460, HP_BAR_Y - 3);
+      ctx.fillText("P2", 770, HP_BAR_Y - 3);
       ctx.fillStyle = "#1c1608";
       ctx.strokeStyle = "#2a2218";
-      ctx.fillRect(280, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
-      ctx.strokeRect(280, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+      ctx.fillRect(530, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+      ctx.strokeRect(530, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp2w = Math.max(0, HP_BAR_W * p2.hpDisplay / 100);
       const hp2LowWarning = p2.hpDisplay < 25 ? Math.abs(Math.sin(now / 200)) : 1;
-      const g2 = ctx.createLinearGradient(280, 0, 280 + HP_BAR_W, 0);
+      const g2 = ctx.createLinearGradient(530, 0, 530 + HP_BAR_W, 0);
       if (p2.hpDisplay < 25) {
         g2.addColorStop(0, "#3b82f6");
         g2.addColorStop(1, `rgba(255,${Math.floor(100 * hp2LowWarning)},0,1)`);
@@ -512,7 +506,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         g2.addColorStop(0, "#60a0e8"); g2.addColorStop(1, "#1e3a8a");
       }
       ctx.fillStyle = g2;
-      ctx.fillRect(280 + HP_BAR_W - hp2w, HP_BAR_Y, hp2w, HP_BAR_H);
+      ctx.fillRect(530 + HP_BAR_W - hp2w, HP_BAR_Y, hp2w, HP_BAR_H);
     }
 
     function drawVFX(now: number) {

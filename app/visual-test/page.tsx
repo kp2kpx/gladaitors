@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
-// ─── Visual Test — canvas fight renderer sandbox ──────────────────────────────
+// â”€â”€â”€ Visual Test â€” canvas fight renderer sandbox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // No auth, no wallet, no KV, no API calls. Pure client-side sandbox.
-// Route: /visual-test (access directly — no nav link in production)
+// Route: /visual-test (access directly â€” no nav link in production)
 // Branch: visual-upgrade
 //
 // Same stat-allocator skeleton as /training, but the FIGHT button launches
@@ -20,10 +20,10 @@ import {
 } from "@/lib/contract";
 import type { FighterColor } from "./CanvasFight";
 
-// Dynamic import — canvas renderer must not SSR
+// Dynamic import â€” canvas renderer must not SSR
 const CanvasFight = dynamic(() => import("./CanvasFight"), { ssr: false });
 
-// ── Defaults ──────────────────────────────────────────────────────────────────
+// â”€â”€ Defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const DEFAULT_STATS: GladiatorStats = {
   strength: 5,
@@ -49,7 +49,7 @@ const STAT_FULL: Record<keyof GladiatorStats, string> = {
   luck: "Luck",
 };
 
-// ── Character options ─────────────────────────────────────────────────────────
+// â”€â”€ Character options â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const CHARACTER_OPTIONS: { id: FighterColor; label: string; sublabel: string; color: string }[] = [
   { id: "red",  label: "MAX", sublabel: "Maximus", color: "#dc2626" },
@@ -57,7 +57,7 @@ const CHARACTER_OPTIONS: { id: FighterColor; label: string; sublabel: string; co
   { id: "gold", label: "GRK", sublabel: "Gruk",    color: "#d4a853" },
 ];
 
-// ── Stat allocator ────────────────────────────────────────────────────────────
+// â”€â”€ Stat allocator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function MiniAllocator({
   stats,
@@ -148,7 +148,7 @@ function MiniAllocator({
   );
 }
 
-// ── Character picker ──────────────────────────────────────────────────────────
+// â”€â”€ Character picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CharPicker({
   value,
@@ -196,7 +196,7 @@ function CharPicker({
   );
 }
 
-// ── Gladiator panel ───────────────────────────────────────────────────────────
+// â”€â”€ Gladiator panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function GladPanel({
   label,
@@ -258,7 +258,7 @@ function GladPanel({
           }}
         >
           <span style={{ fontSize: "1.5rem", lineHeight: 1 }}>
-            {color === "red" ? "⚔" : color === "blue" ? "🏛" : "🪓"}
+            {color === "red" ? "âš”" : color === "blue" ? "ðŸ›" : "ðŸª“"}
           </span>
           <span style={{ fontSize: "0.5rem", color: accent, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
             {color === "red" ? "Maximus" : color === "blue" ? "Spartax" : "Gruk"}
@@ -278,7 +278,7 @@ function GladPanel({
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Step = "configure" | "replay";
 
@@ -351,9 +351,9 @@ export default function VisualTestPage() {
         </span>
       </div>
 
-      <div style={{ flex: 1, width: "100%", maxWidth: 480, margin: "0 auto", padding: "16px 12px" }}>
+      <div style={{ flex: 1, width: "100%", maxWidth: 840, margin: "0 auto", padding: "16px 12px" }}>
 
-        {/* ── Configure step ──────────────────────────────────────────────── */}
+        {/* â”€â”€ Configure step â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {step === "configure" && (
           <>
             <div
@@ -421,7 +421,7 @@ export default function VisualTestPage() {
           </>
         )}
 
-        {/* ── Replay step ─────────────────────────────────────────────────── */}
+        {/* â”€â”€ Replay step â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {step === "replay" && fightResult && (
           <div>
             {/* Winner label */}
