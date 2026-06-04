@@ -273,6 +273,16 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     let critFlashBorn = 0;
     const CRIT_SCREEN_DUR = 280;
 
+    // Combo counter
+    interface ComboText {
+      x: number;
+      y: number;
+      born: number;
+      text: string;
+      comboStep: number;
+    }
+    const comboTexts: ComboText[] = [];
+
     const crowd = Array.from({ length: 18 }, () => ({
       x: 30 + Math.random() * 420,
       y: 50 + Math.random() * 50,
@@ -373,7 +383,9 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const filter = COLOR_TO_FILTER[f.color];
 
       const destX = cx - CHAR_W / 2;
-      const destY = FLOOR_Y - CHAR_H;
+      // Idle bob: gentle up/down float when standing still
+      const bobAmt = (f.state === "idle" && f.alive) ? Math.sin(now / 600) * 2.5 : 0;
+      const destY = FLOOR_Y - CHAR_H + bobAmt;
       const destW = CHAR_W;
       const destH = CHAR_H;
 
@@ -438,8 +450,14 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.fillRect(20, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       ctx.strokeRect(20, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp1w = Math.max(0, HP_BAR_W * p1.hpDisplay / 100);
+      const hp1LowWarning = p1.hpDisplay < 25 ? Math.abs(Math.sin(performance.now() / 200)) : 1;
       const g1 = ctx.createLinearGradient(20, 0, 20 + HP_BAR_W, 0);
-      g1.addColorStop(0, "#e05555"); g1.addColorStop(1, "#8b1a1a");
+      if (p1.hpDisplay < 25) {
+        g1.addColorStop(0, `rgba(255,${Math.floor(100 * hp1LowWarning)},0,1)`);
+        g1.addColorStop(1, "#8b1a1a");
+      } else {
+        g1.addColorStop(0, "#e05555"); g1.addColorStop(1, "#8b1a1a");
+      }
       ctx.fillStyle = g1;
       ctx.fillRect(20, HP_BAR_Y, hp1w, HP_BAR_H);
 
@@ -451,8 +469,14 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.fillRect(280, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       ctx.strokeRect(280, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp2w = Math.max(0, HP_BAR_W * p2.hpDisplay / 100);
+      const hp2LowWarning = p2.hpDisplay < 25 ? Math.abs(Math.sin(performance.now() / 200)) : 1;
       const g2 = ctx.createLinearGradient(280, 0, 280 + HP_BAR_W, 0);
-      g2.addColorStop(0, "#60a0e8"); g2.addColorStop(1, "#1e3a8a");
+      if (p2.hpDisplay < 25) {
+        g2.addColorStop(0, "#3b82f6");
+        g2.addColorStop(1, `rgba(255,${Math.floor(100 * hp2LowWarning)},0,1)`);
+      } else {
+        g2.addColorStop(0, "#60a0e8"); g2.addColorStop(1, "#1e3a8a");
+      }
       ctx.fillStyle = g2;
       ctx.fillRect(280 + HP_BAR_W - hp2w, HP_BAR_Y, hp2w, HP_BAR_H);
     }
@@ -609,6 +633,32 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       f.hpDisplay += (f.hpTarget - f.hpDisplay) * 0.12;
     }
 
+    function drawComboTexts(now: number) {
+      for (const ct of comboTexts) {
+        const elapsed = now - ct.born;
+        const duration = 700;
+        if (elapsed >= duration) continue;
+        const t = elapsed / duration;
+        const opacity = t < 0.1 ? t / 0.1 : t > 0.6 ? 1 - (t - 0.6) / 0.4 : 1;
+        const scale = t < 0.12 ? 0.6 + (t / 0.12) * 0.5 : 1.1;
+        const yOff = t * -15;
+        const comboColor = ct.comboStep >= 4 ? "#ff4400" : ct.comboStep >= 3 ? "#ff8800" : "#ffcc00";
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        ctx.translate(ct.x, ct.y + yOff);
+        ctx.scale(scale, scale);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "bold 18px monospace";
+        ctx.strokeStyle = "rgba(0,0,0,0.9)";
+        ctx.lineWidth = 4;
+        ctx.strokeText(ct.text, 0, 0);
+        ctx.fillStyle = comboColor;
+        ctx.fillText(ct.text, 0, 0);
+        ctx.restore();
+      }
+    }
+
     function drawOverlayText(now: number) {
       // FIGHT! text burst
       if (fightTextBorn > 0) {
@@ -723,6 +773,18 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
             triggerHit(defender, perfNow, entry.isCrit);
             spawnSlash(attacker, defender, entry.isCrit, entry.isCombo && entry.comboStep >= 2, perfNow);
             spawnDamageNum(defender, entry.damage, entry.isCrit, perfNow);
+            // Spawn combo text for combos of 2+
+            if (entry.isCombo && entry.comboStep >= 2) {
+              const comboLabels = ["", "", "2x COMBO", "3x COMBO", "4x COMBO"];
+              const label = comboLabels[Math.min(entry.comboStep, 4)] || `${entry.comboStep}x COMBO`;
+              comboTexts.push({
+                x: W / 2,
+                y: FLOOR_Y - CHAR_H * 0.30,
+                born: perfNow,
+                text: label,
+                comboStep: entry.comboStep,
+              });
+            }
             p1.hpTarget = entry.hp1After;
             p2.hpTarget = entry.hp2After;
 
@@ -812,6 +874,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       drawFighter(p2, now);
       drawDamageNums(now);
       drawHitCounter();
+      drawComboTexts(now);
       drawOverlayText(now);
       drawCritScreenFlash(now);
 
@@ -845,5 +908,6 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     />
   );
 }
+
 
 
