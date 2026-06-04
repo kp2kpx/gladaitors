@@ -28,8 +28,10 @@ const SPRITE_FRAMES  = 8;
 // The sheet has a large transparent gap Y=511-870 between torso and legs.
 // Rendering the full height causes floating torso with detached legs artefact.
 // Portrait bust is a deliberate design choice — clean readable gladiator figure.
-const SPRITE_SRC_Y = 150;
-const SPRITE_SRC_H = 410;   // Y=150 to Y=560
+// Full-body crop: Y=50 to Y=1100 captures the entire character including head, torso, and legs.
+// Pixel scan confirmed art spans Y=51-1185 with uniform density throughout frame 4.
+const SPRITE_SRC_Y = 50;
+const SPRITE_SRC_H = 1050;  // Y=50 to Y=1100 — full body
 
 type AnimName = "idle" | "attack" | "hit" | "death";
 
@@ -172,8 +174,8 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     const W = canvasDims.w;
     const H = canvasDims.h;
     const FLOOR_Y    = Math.round(H * 0.88);
-    const CHAR_H     = Math.round(H * 0.75);
-    const CHAR_W     = Math.round(CHAR_H * 0.35);  // proportional to height, not canvas width
+    const CHAR_H     = Math.round(H * 0.80);
+    const CHAR_W     = Math.round(CHAR_H * 0.55);  // inflated for readability — sprite is naturally narrow (106px w x 1050px h)
     const FIGHT_GAP  = Math.round(W * 0.32);
     // BASE_DEST_Y: top of character. Feet land at FLOOR_Y. No offset compensation needed
     // because portrait crop (Y=150-560) doesn't have a bottom transparent dead zone.
