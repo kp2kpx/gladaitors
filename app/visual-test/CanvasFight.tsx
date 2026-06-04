@@ -390,7 +390,11 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const destX = cx - CHAR_W / 2;
       // Idle bob: gentle up/down float when standing still
       const bobAmt = (f.state === "idle" && f.alive) ? Math.sin(now / 600) * 2.5 : 0;
-      const destY = FLOOR_Y - CHAR_H + bobAmt;
+      // cropBottomOffset: the crop removes the bottom 86px of the 1186px source frame.
+      // Without this offset, the character's feet appear 17px above FLOOR_Y after cropping.
+      // Apply offset only to non-death anims (death uses full frame, no crop).
+      const cropBottomOffset = (anim === "death") ? 0 : Math.round((SPRITE_FRAME_H - (SPRITE_SRC_Y + SPRITE_SRC_H)) / SPRITE_FRAME_H * CHAR_H);
+      const destY = FLOOR_Y - CHAR_H + cropBottomOffset + bobAmt;
       const destW = CHAR_W;
       const destH = CHAR_H;
 
