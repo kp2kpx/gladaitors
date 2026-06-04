@@ -965,7 +965,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           width: "100%",
           height: "auto",
           display: "block",
-          imageRendering: "pixelated",
+          imageRendering: "auto",
           borderRadius: "4px",
           border: "1px solid #2a2218",
         }}
