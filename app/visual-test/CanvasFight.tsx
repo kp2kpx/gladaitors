@@ -303,7 +303,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       // VFX anchored to defender's torso: ~55% up from floor
       vfxList.push({
         x: fightX(defender),
-        y: FLOOR_Y - CHAR_H * 0.55,
+        y: FLOOR_Y - CHAR_H * 0.55 + 17, // +17 = cropBottomOffset compensation
         born: now,
         duration: isCrit ? 450 : 200,
         lineLen: isCrit ? 65 : 32,
@@ -315,7 +315,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     function spawnDamageNum(defender: Fighter, damage: number, isCrit: boolean, now: number) {
       const ix = fightX(defender) + (Math.random() * 24 - 12);
-      const iy = FLOOR_Y - CHAR_H * 0.72;
+      const iy = FLOOR_Y - CHAR_H * 0.72 + 17; // +17 = cropBottomOffset compensation
       damageNums.push({
         x: ix, y: iy, startY: iy, born: now,
         text: isCrit ? `CRIT! +${damage}` : `+${damage}`,
@@ -390,10 +390,9 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const destX = cx - CHAR_W / 2;
       // Idle bob: gentle up/down float when standing still
       const bobAmt = (f.state === "idle" && f.alive) ? Math.sin(now / 600) * 2.5 : 0;
-      // cropBottomOffset: the crop removes the bottom 86px of the 1186px source frame.
-      // Without this offset, the character's feet appear 17px above FLOOR_Y after cropping.
-      // Apply offset only to non-death anims (death uses full frame, no crop).
-      const cropBottomOffset = (anim === "death") ? 0 : Math.round((SPRITE_FRAME_H - (SPRITE_SRC_Y + SPRITE_SRC_H)) / SPRITE_FRAME_H * CHAR_H);
+      // cropBottomOffset: eliminates the 17px float caused by the transparent dead zone
+      // at the bottom of the sprite frame (86px / 1186px * 240px destH = ~17px).
+      const cropBottomOffset = Math.round((SPRITE_FRAME_H - (SPRITE_SRC_Y + SPRITE_SRC_H)) / SPRITE_FRAME_H * CHAR_H);
       const destY = FLOOR_Y - CHAR_H + cropBottomOffset + bobAmt;
       const destW = CHAR_W;
       const destH = CHAR_H;
