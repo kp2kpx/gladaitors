@@ -1,18 +1,9 @@
 ﻿"use client";
 
-// â”€â”€â”€ CanvasFight â€” Street Fighter-style canvas renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Plays back a FightResult as a side-view arena animation.
-// No Phaser, no game libraries â€” vanilla JS canvas inside a React component.
-// Dynamically imported (ssr: false) from visual-test/page.tsx.
-//
-// Characters are rendered from real pixel art sprite sheets in /public/characters/.
-// Each animation (idle/attack/hit/death) is a horizontal strip of 8 frames,
-// each frame 106px wide Ã— 1186px tall (sheet: 848 Ã— 1186).
-//
-// Color â†’ sprite folder mapping:
-//   red  â†’ /characters/red/   (Maximus)
-//   blue â†’ /characters/blue/  (Spartax)
-//   gold â†’ /characters/blue/  (Gruk â€” uses blue sheet with golden CSS filter tint)
+// --- CanvasFight -- Street Fighter-style canvas renderer ---------------------
+// Visual overhaul v1: cinematic timing, character visibility fix, screen shake,
+// crit slow-motion, arena depth, dramatic death.
+// Branch: visual-upgrade
 
 import { useEffect, useRef } from "react";
 import type { FightResult, RoundLog } from "@/lib/fight-engine";
@@ -27,15 +18,18 @@ interface CanvasFightProps {
   onDone: () => void;
 }
 
-// â”€â”€ Sprite sheet constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Sprite sheet constants ---------------------------------------------------
 
-const SPRITE_FRAME_W = 106;   // px per frame (848 / 8)
-const SPRITE_FRAME_H = 1186;  // full sheet height
-const SPRITE_FRAMES  = 8;     // frames per animation
+const SPRITE_FRAME_W = 106;
+const SPRITE_FRAMES  = 8;
+
+// Art crop: actual gladiator art does not fill the full 1186px height.
+// These values crop to only the visible art region.
+const SPRITE_ART_Y = 200;
+const SPRITE_ART_H = 750;
 
 type AnimName = "idle" | "attack" | "hit" | "death";
 
-// Map fighter state â†’ animation name
 function stateToAnim(state: FighterState): AnimName {
   if (state === "walk")   return "idle";
   if (state === "attack") return "attack";
@@ -44,21 +38,18 @@ function stateToAnim(state: FighterState): AnimName {
   return "idle";
 }
 
-// Folder for each color (gold reuses blue)
 const COLOR_TO_FOLDER: Record<FighterColor, string> = {
   red:  "red",
   blue: "blue",
   gold: "blue",
 };
 
-// CSS filter tint for gold (sepia+saturate gives warm amber-gold look)
 const COLOR_TO_FILTER: Record<FighterColor, string | null> = {
   red:  null,
   blue: null,
   gold: "sepia(1) saturate(4) hue-rotate(10deg) brightness(1.1)",
 };
 
-// Animation playback FPS per state
 const ANIM_FPS: Record<AnimName, number> = {
   idle:   8,
   attack: 16,
@@ -66,7 +57,6 @@ const ANIM_FPS: Record<AnimName, number> = {
   death:  8,
 };
 
-// Whether an animation loops
 const ANIM_LOOPS: Record<AnimName, boolean> = {
   idle:   true,
   attack: false,
@@ -74,38 +64,42 @@ const ANIM_LOOPS: Record<AnimName, boolean> = {
   death:  false,
 };
 
-// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Canvas dimensions --------------------------------------------------------
 
 const W = 480;
-const H = 240;
-const FLOOR_Y = 188;
+const H = 320;
+const FLOOR_Y = 258;
 
-// Character render dimensions -- scaled to fit canvas height.
-// CHAR_H = 70% of canvas height so characters fill the arena floor visibly.
-// CHAR_W uses a fixed visual ratio (0.35 × CHAR_H) rather than the raw sprite aspect
-// ratio (106/1186 ≈ 0.089) because the sprite sheets have large transparent vertical
-// padding -- the raw ratio produces a ~14px-wide toothpick. At 0.35 the character
-// renders at ~59px wide × 168px tall, feet at FLOOR_Y, which fills the canvas well.
-const CHAR_H = H * 0.70;          // 168px at H=240
-const CHAR_W = CHAR_H * 0.35;     // ~59px — visually correct given sprite sheet padding
+const CHAR_H = H * 0.58;
+const CHAR_W = CHAR_H * 0.40;
 
-
-const FIGHT_GAP = 110;
+const FIGHT_GAP = 140;
 const HP_BAR_W = 180;
 const HP_BAR_H = 12;
 const HP_BAR_Y = 16;
 
-// Timings (ms)
-const ATTACK_LUNGE_MS  = 80;
-const ATTACK_RETRACT_MS = 80;
-const HIT_FLASH_MS     = 100;
-const HIT_KNOCKBACK_MS = 80;
-const NORMAL_GAP_MS    = 140;
-const COMBO_GAP_MS     = 20;
-const DEATH_MS         = 500;
-const POST_DEATH_MS    = 600;
+// -- Timing constants ---------------------------------------------------------
 
-// â”€â”€ VFX types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const ATTACK_LUNGE_MS   = 120;
+const ATTACK_RETRACT_MS = 100;
+const HIT_FLASH_MS      = 180;
+const HIT_KNOCKBACK_MS  = 140;
+const NORMAL_GAP_MS     = 380;
+const COMBO_GAP_MS      = 55;
+
+const CRIT_LUNGE_MS     = 220;
+const CRIT_RETRACT_MS   = 200;
+const CRIT_FLASH_MS     = 350;
+const CRIT_KNOCKBACK_MS = 220;
+const CRIT_GAP_MS       = 600;
+
+const DEATH_MS      = 1400;
+const POST_DEATH_MS = 1800;
+
+const SHAKE_MAG = 8;
+const SHAKE_DUR = 320;
+
+// -- VFX types ----------------------------------------------------------------
 
 interface SlashVFX {
   x: number;
@@ -126,9 +120,11 @@ interface DamageNum {
   born: number;
   text: string;
   isCrit: boolean;
+  duration: number;
+  floatDist: number;
 }
 
-// â”€â”€ Fighter state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Fighter state ------------------------------------------------------------
 
 type FighterState = "idle" | "walk" | "attack" | "hit" | "death";
 
@@ -149,27 +145,23 @@ interface Fighter {
   color: FighterColor;
   side: "p1" | "p2";
   alive: boolean;
+  isCritHit: boolean;
+  attackLungeMs: number;
+  attackRetractMs: number;
 }
 
-// â”€â”€ Sprite image cache key: "{folder}/{anim}" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+type SpriteKey = string;
 
-type SpriteKey = string; // e.g. "red/idle"
-
-// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Main component -----------------------------------------------------------
 
 export default function CanvasFight({ result, p1Color, p2Color, onDone }: CanvasFightProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const doneCalledRef = useRef(false);
-
-  // Audio -- null-safe, mirrors FightReplay pattern
   const audio = useFightAudio();
 
-  // Unlock audio context on component mount (first interaction already happened
-  // when user clicked FIGHT button, so this is safe to call immediately)
   useEffect(() => {
     audio?.unlockAndPlay();
   }, [audio?.unlockAndPlay]);
-
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -180,7 +172,6 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     doneCalledRef.current = false;
 
-    // â”€â”€ Preload all sprite images â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const anims: AnimName[] = ["idle", "attack", "hit", "death"];
     const foldersNeeded = Array.from(new Set([
       COLOR_TO_FOLDER[p1Color],
@@ -205,18 +196,14 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         const key: SpriteKey = `${folder}/${anim}`;
         const img = new window.Image();
         img.onload = tryStart;
-        img.onerror = tryStart; // degrade gracefully
+        img.onerror = tryStart;
         img.src = `/characters/${folder}/${anim}.png`;
         spriteImages[key] = img;
       }
     }
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     function getSpriteImage(color: FighterColor, anim: AnimName): HTMLImageElement | null {
-      const folder = COLOR_TO_FOLDER[color];
-      const key: SpriteKey = `${folder}/${anim}`;
-      return spriteImages[key] ?? null;
+      return spriteImages[`${COLOR_TO_FOLDER[color]}/${anim}`] ?? null;
     }
 
     function getFrameIndex(f: Fighter, now: number): number {
@@ -224,59 +211,34 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const fps = ANIM_FPS[anim];
       const loops = ANIM_LOOPS[anim];
       const elapsed = now - f.stateStart;
-      const totalFrames = SPRITE_FRAMES;
-      const frameDuration = 1000 / fps;
-      const rawFrame = Math.floor(elapsed / frameDuration);
-      if (loops) {
-        return rawFrame % totalFrames;
-      } else {
-        return Math.min(rawFrame, totalFrames - 1);
-      }
+      const rawFrame = Math.floor(elapsed / (1000 / fps));
+      return loops ? rawFrame % SPRITE_FRAMES : Math.min(rawFrame, SPRITE_FRAMES - 1);
     }
 
-    // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     const p1: Fighter = {
-      x: 80,
-      baseX: 80,
-      y: FLOOR_Y - CHAR_H,
-      state: "walk",
-      stateStart: 0,
-      attackDir: 1,
-      lungeOffset: 0,
-      knockOffset: 0,
-      knockDir: -1,
-      deathAngle: 0,
-      deathOpacity: 1,
-      hpTarget: 100,
-      hpDisplay: 100,
-      color: p1Color,
-      side: "p1",
-      alive: true,
+      x: 90, baseX: 90, y: FLOOR_Y - CHAR_H,
+      state: "walk", stateStart: 0, attackDir: 1,
+      lungeOffset: 0, knockOffset: 0, knockDir: -1,
+      deathAngle: 0, deathOpacity: 1,
+      hpTarget: 100, hpDisplay: 100,
+      color: p1Color, side: "p1", alive: true,
+      isCritHit: false,
+      attackLungeMs: ATTACK_LUNGE_MS, attackRetractMs: ATTACK_RETRACT_MS,
     };
 
     const p2: Fighter = {
-      x: 368,
-      baseX: 368,
-      y: FLOOR_Y - CHAR_H,
-      state: "walk",
-      stateStart: 0,
-      attackDir: -1,
-      lungeOffset: 0,
-      knockOffset: 0,
-      knockDir: 1,
-      deathAngle: 0,
-      deathOpacity: 1,
-      hpTarget: 100,
-      hpDisplay: 100,
-      color: p2Color,
-      side: "p2",
-      alive: true,
+      x: 390, baseX: 390, y: FLOOR_Y - CHAR_H,
+      state: "walk", stateStart: 0, attackDir: -1,
+      lungeOffset: 0, knockOffset: 0, knockDir: 1,
+      deathAngle: 0, deathOpacity: 1,
+      hpTarget: 100, hpDisplay: 100,
+      color: p2Color, side: "p2", alive: true,
+      isCritHit: false,
+      attackLungeMs: ATTACK_LUNGE_MS, attackRetractMs: ATTACK_RETRACT_MS,
     };
 
     const vfxList: SlashVFX[] = [];
     const damageNums: DamageNum[] = [];
-
     const log = result.log;
     let logIdx = 0;
     let hitDisplayIdx = 0;
@@ -285,53 +247,63 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     let phase: Phase = "intro";
     let phaseStart = 0;
     let nextHitAt = 0;
+    let shakeStart = 0;
 
-    const crowd = Array.from({ length: 14 }, () => ({
-      x: 50 + Math.random() * 380,
-      y: 40 + Math.random() * 40,
-      r: 3 + Math.random() * 3,
-      c: `rgba(${60 + Math.floor(Math.random() * 20)},${40 + Math.floor(Math.random() * 10)},${30 + Math.floor(Math.random() * 10)},0.3)`,
+    const crowd = Array.from({ length: 18 }, () => ({
+      x: 30 + Math.random() * 420,
+      y: 50 + Math.random() * 50,
+      r: 2.5 + Math.random() * 3,
+      c: `rgba(${60 + Math.floor(Math.random() * 30)},${40 + Math.floor(Math.random() * 15)},${30 + Math.floor(Math.random() * 10)},${(0.25 + Math.random() * 0.2).toFixed(2)})`,
     }));
-
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     function fightX(f: Fighter): number {
       return f.x + f.lungeOffset + f.knockOffset;
     }
 
-    function spawnSlash(attacker: Fighter, defender: Fighter, isCrit: boolean, isCombo: boolean, now: number) {
+    function spawnSlash(_attacker: Fighter, defender: Fighter, isCrit: boolean, isCombo: boolean, now: number) {
       vfxList.push({
         x: fightX(defender),
-        y: FLOOR_Y - 48,
+        y: FLOOR_Y - CHAR_H * 0.60,
         born: now,
-        duration: isCrit ? 200 : 150,
-        lineLen: isCrit ? 32 : 20,
-        lineW: isCrit ? 3 : 2,
+        duration: isCrit ? 450 : 200,
+        lineLen: isCrit ? 65 : 32,
+        lineW: isCrit ? 5 : 2.5,
         color: isCrit ? "#ffd700" : "#ffe080",
-        isCombo,
-        isCrit,
+        isCombo, isCrit,
       });
     }
 
     function spawnDamageNum(defender: Fighter, damage: number, isCrit: boolean, now: number) {
-      const ix = fightX(defender) + (Math.random() * 20 - 10);
-      const iy = FLOOR_Y - 64;
-      damageNums.push({ x: ix, y: iy, startY: iy, born: now, text: isCrit ? `+${damage} CRIT` : `+${damage}`, isCrit });
+      const ix = fightX(defender) + (Math.random() * 24 - 12);
+      const iy = FLOOR_Y - CHAR_H * 0.80;
+      damageNums.push({
+        x: ix, y: iy, startY: iy, born: now,
+        text: isCrit ? `CRIT! +${damage}` : `+${damage}`,
+        isCrit,
+        duration: isCrit ? 1200 : 800,
+        floatDist: isCrit ? 65 : 40,
+      });
     }
 
-    function triggerHit(defender: Fighter, now: number) {
+    function triggerHit(defender: Fighter, now: number, isCrit: boolean) {
       defender.state = "hit";
       defender.stateStart = now;
       defender.knockDir = defender.side === "p1" ? -1 : 1;
+      defender.isCritHit = isCrit;
     }
 
-    // â”€â”€ Draw functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    function drawArena(now: number) {
+    function drawArena(_now: number) {
       const grad = ctx.createLinearGradient(0, 0, 0, H);
-      grad.addColorStop(0, "#0d0b08");
-      grad.addColorStop(1, "#1a1510");
+      grad.addColorStop(0, "#0a0804");
+      grad.addColorStop(0.6, "#120e08");
+      grad.addColorStop(1, "#1e1810");
       ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      const spotlight = ctx.createRadialGradient(W / 2, FLOOR_Y - 30, 0, W / 2, FLOOR_Y - 30, 140);
+      spotlight.addColorStop(0, "rgba(255, 240, 180, 0.07)");
+      spotlight.addColorStop(1, "rgba(255, 240, 180, 0)");
+      ctx.fillStyle = spotlight;
       ctx.fillRect(0, 0, W, H);
 
       for (const dot of crowd) {
@@ -341,8 +313,26 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         ctx.fill();
       }
 
-      ctx.fillStyle = "#2a2218";
+      ctx.fillStyle = "#3a2e1e";
       ctx.fillRect(0, FLOOR_Y, W, 2);
+
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.strokeStyle = "#4a3a28";
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, FLOOR_Y + i * 9);
+        ctx.lineTo(W, FLOOR_Y + i * 9);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.8);
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.45)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, W, H);
     }
 
     function drawFighter(f: Fighter, now: number) {
@@ -352,22 +342,19 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const img = getSpriteImage(f.color, anim);
       const filter = COLOR_TO_FILTER[f.color];
 
-      // Destination rect: feet at FLOOR_Y
       const destX = cx - CHAR_W / 2;
       const destY = FLOOR_Y - CHAR_H;
       const destW = CHAR_W;
       const destH = CHAR_H;
 
-      // Source rect: one frame from the horizontal strip
       const srcX = frameIdx * SPRITE_FRAME_W;
-      const srcY = 0;
       const srcW = SPRITE_FRAME_W;
-      const srcH = SPRITE_FRAME_H;
+      const srcY = SPRITE_ART_Y;
+      const srcH = SPRITE_ART_H;
 
       ctx.save();
       ctx.globalAlpha = f.state === "death" ? f.deathOpacity : 1;
 
-      // Death: rotate the fighter to fall sideways
       if (f.state === "death") {
         const pivotX = cx;
         const pivotY = FLOOR_Y;
@@ -377,25 +364,21 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         ctx.translate(-pivotX, -pivotY);
       }
 
-      // Hit flash: white rect overlay (skip sprite draw)
       if (f.state === "hit") {
         const elapsed = now - f.stateStart;
-        if (elapsed < HIT_FLASH_MS) {
-          ctx.fillStyle = "rgba(255,255,255,0.85)";
-          ctx.fillRect(destX, destY + destH * 0.55, destW, destH * 0.45);
+        const flashDur = f.isCritHit ? CRIT_FLASH_MS : HIT_FLASH_MS;
+        if (elapsed < flashDur) {
+          ctx.fillStyle = f.isCritHit ? "rgba(255, 200, 50, 0.88)" : "rgba(255, 255, 255, 0.85)";
+          ctx.fillRect(destX, destY, destW, destH);
           ctx.restore();
           return;
         }
       }
 
-      // Apply golden tint filter if needed
-      if (filter) {
-        ctx.filter = filter;
-      }
+      if (filter) ctx.filter = filter;
 
       if (img && img.complete && img.naturalWidth > 0) {
         if (f.side === "p2") {
-          // Flip P2 horizontally around their center X
           ctx.translate(cx + CHAR_W / 2, 0);
           ctx.scale(-1, 1);
           ctx.drawImage(img, srcX, srcY, srcW, srcH, -CHAR_W / 2, destY, destW, destH);
@@ -403,15 +386,10 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           ctx.drawImage(img, srcX, srcY, srcW, srcH, destX, destY, destW, destH);
         }
       } else {
-        // Fallback: colored rectangle while image loads
         if (filter) ctx.filter = "none";
-        const fallbackColors: Record<FighterColor, string> = {
-          red:  "#c47070",
-          blue: "#6090c8",
-          gold: "#b8860b",
-        };
-        ctx.fillStyle = fallbackColors[f.color];
-        ctx.fillRect(destX, destY + destH * 0.6, destW, destH * 0.4);
+        const fallback: Record<FighterColor, string> = { red: "#c47070", blue: "#6090c8", gold: "#b8860b" };
+        ctx.fillStyle = fallback[f.color];
+        ctx.fillRect(destX, destY + destH * 0.1, destW, destH * 0.9);
       }
 
       ctx.filter = "none";
@@ -423,26 +401,28 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.fillStyle = "#e8dcc8";
       ctx.textAlign = "left";
       ctx.fillText("P1", 20, HP_BAR_Y - 3);
-
       ctx.fillStyle = "#1c1608";
       ctx.strokeStyle = "#2a2218";
       ctx.lineWidth = 1;
       ctx.fillRect(20, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       ctx.strokeRect(20, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp1w = Math.max(0, HP_BAR_W * p1.hpDisplay / 100);
-      ctx.fillStyle = "#c47070";
+      const g1 = ctx.createLinearGradient(20, 0, 20 + HP_BAR_W, 0);
+      g1.addColorStop(0, "#e05555"); g1.addColorStop(1, "#8b1a1a");
+      ctx.fillStyle = g1;
       ctx.fillRect(20, HP_BAR_Y, hp1w, HP_BAR_H);
 
       ctx.fillStyle = "#e8dcc8";
       ctx.textAlign = "right";
       ctx.fillText("P2", 460, HP_BAR_Y - 3);
-
       ctx.fillStyle = "#1c1608";
       ctx.strokeStyle = "#2a2218";
       ctx.fillRect(280, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       ctx.strokeRect(280, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp2w = Math.max(0, HP_BAR_W * p2.hpDisplay / 100);
-      ctx.fillStyle = "#6090c8";
+      const g2 = ctx.createLinearGradient(280, 0, 280 + HP_BAR_W, 0);
+      g2.addColorStop(0, "#60a0e8"); g2.addColorStop(1, "#1e3a8a");
+      ctx.fillStyle = g2;
       ctx.fillRect(280 + HP_BAR_W - hp2w, HP_BAR_Y, hp2w, HP_BAR_H);
     }
 
@@ -457,13 +437,13 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
         if (vfx.isCrit) {
           ctx.beginPath();
-          ctx.arc(vfx.x, vfx.y, 20, 0, Math.PI * 2);
-          ctx.fillStyle = "#ffd70020";
+          ctx.arc(vfx.x, vfx.y, 30, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(255, 215, 0, 0.12)";
           ctx.fill();
         }
 
-        const angles = [0, Math.PI / 3, (2 * Math.PI) / 3];
-        for (const angle of angles) {
+        const primaryAngles = [0, Math.PI / 3, (2 * Math.PI) / 3];
+        for (const angle of primaryAngles) {
           ctx.beginPath();
           ctx.moveTo(vfx.x - Math.cos(angle) * vfx.lineLen / 2, vfx.y - Math.sin(angle) * vfx.lineLen / 2);
           ctx.lineTo(vfx.x + Math.cos(angle) * vfx.lineLen / 2, vfx.y + Math.sin(angle) * vfx.lineLen / 2);
@@ -472,12 +452,28 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           ctx.stroke();
         }
 
-        if (vfx.isCombo) {
+        if (vfx.isCrit) {
+          const innerAngles = [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4];
+          ctx.globalAlpha = opacity * 0.65;
+          for (const angle of innerAngles) {
+            const len = vfx.lineLen * 0.55;
+            ctx.beginPath();
+            ctx.moveTo(vfx.x - Math.cos(angle) * len / 2, vfx.y - Math.sin(angle) * len / 2);
+            ctx.lineTo(vfx.x + Math.cos(angle) * len / 2, vfx.y + Math.sin(angle) * len / 2);
+            ctx.strokeStyle = "#ff8800";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+          ctx.globalAlpha = opacity;
+        }
+
+        if (vfx.isCombo && !vfx.isCrit) {
           const comboAngles = [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4];
+          ctx.globalAlpha = opacity * 0.6;
           for (const angle of comboAngles) {
             ctx.beginPath();
-            ctx.moveTo(vfx.x - Math.cos(angle) * 6, vfx.y - Math.sin(angle) * 6);
-            ctx.lineTo(vfx.x + Math.cos(angle) * 6, vfx.y + Math.sin(angle) * 6);
+            ctx.moveTo(vfx.x - Math.cos(angle) * 7, vfx.y - Math.sin(angle) * 7);
+            ctx.lineTo(vfx.x + Math.cos(angle) * 7, vfx.y + Math.sin(angle) * 7);
             ctx.strokeStyle = "#ff8800";
             ctx.lineWidth = 2;
             ctx.stroke();
@@ -491,17 +487,27 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     function drawDamageNums(now: number) {
       for (const dn of damageNums) {
         const elapsed = now - dn.born;
-        const duration = 600;
-        if (elapsed >= duration) continue;
-        const progress = elapsed / duration;
-        const currentY = dn.startY - 30 * progress;
-        const opacity = elapsed > 400 ? 1 - (elapsed - 400) / 200 : 1;
+        if (elapsed >= dn.duration) continue;
+        const progress = elapsed / dn.duration;
+        const currentY = dn.startY - dn.floatDist * progress;
+        const fadeStart = dn.duration * 0.6;
+        const opacity = elapsed > fadeStart ? 1 - (elapsed - fadeStart) / (dn.duration - fadeStart) : 1;
 
         ctx.save();
         ctx.globalAlpha = opacity;
-        ctx.font = dn.isCrit ? "bold 16px monospace" : "bold 14px monospace";
-        ctx.fillStyle = dn.isCrit ? "#ffd700" : "#ffffff";
         ctx.textAlign = "center";
+
+        if (dn.isCrit) {
+          ctx.font = "bold 20px monospace";
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(0,0,0,0.8)";
+          ctx.strokeText(dn.text, dn.x, currentY);
+          ctx.fillStyle = "#ffd700";
+        } else {
+          ctx.font = "bold 14px monospace";
+          ctx.fillStyle = "#ffffff";
+        }
+
         ctx.fillText(dn.text, dn.x, currentY);
         ctx.restore();
       }
@@ -512,10 +518,8 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.font = "9px monospace";
       ctx.fillStyle = "#4b3a28";
       ctx.textAlign = "center";
-      ctx.fillText(`HIT ${hitDisplayIdx}/${log.length}`, W / 2, H - 10);
+      ctx.fillText(`HIT ${hitDisplayIdx}/${log.length}`, W / 2, H - 8);
     }
-
-    // â”€â”€ Update functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     function updateFighter(f: Fighter, now: number, dt: number) {
       const elapsed = now - f.stateStart;
@@ -527,12 +531,12 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           break;
         }
         case "attack": {
-          const half = ATTACK_LUNGE_MS;
-          const full = ATTACK_LUNGE_MS + ATTACK_RETRACT_MS;
+          const half = f.attackLungeMs;
+          const full = f.attackLungeMs + f.attackRetractMs;
           if (elapsed < half) {
-            f.lungeOffset = f.attackDir * 20 * (elapsed / half);
+            f.lungeOffset = f.attackDir * 22 * (elapsed / half);
           } else if (elapsed < full) {
-            f.lungeOffset = f.attackDir * 20 * (1 - (elapsed - half) / half);
+            f.lungeOffset = f.attackDir * 22 * (1 - (elapsed - half) / f.attackRetractMs);
           } else {
             f.lungeOffset = 0;
             f.state = "idle";
@@ -541,17 +545,20 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           break;
         }
         case "hit": {
-          const knockDuration = HIT_KNOCKBACK_MS * 2;
-          if (elapsed < HIT_FLASH_MS) {
-            // flash phase â€” no movement
-          } else if (elapsed < HIT_FLASH_MS + HIT_KNOCKBACK_MS) {
-            const t = (elapsed - HIT_FLASH_MS) / HIT_KNOCKBACK_MS;
-            f.knockOffset = f.knockDir * 15 * t;
-          } else if (elapsed < HIT_FLASH_MS + knockDuration) {
-            const t = (elapsed - HIT_FLASH_MS - HIT_KNOCKBACK_MS) / HIT_KNOCKBACK_MS;
-            f.knockOffset = f.knockDir * 15 * (1 - t);
+          const knockMs = f.isCritHit ? CRIT_KNOCKBACK_MS : HIT_KNOCKBACK_MS;
+          const flashDur = f.isCritHit ? CRIT_FLASH_MS : HIT_FLASH_MS;
+          const knockDuration = knockMs * 2;
+          if (elapsed < flashDur) {
+            // flash phase
+          } else if (elapsed < flashDur + knockMs) {
+            const t = (elapsed - flashDur) / knockMs;
+            f.knockOffset = f.knockDir * 18 * t;
+          } else if (elapsed < flashDur + knockDuration) {
+            const t = (elapsed - flashDur - knockMs) / knockMs;
+            f.knockOffset = f.knockDir * 18 * (1 - t);
           } else {
             f.knockOffset = 0;
+            f.isCritHit = false;
             f.state = "idle";
             f.stateStart = now;
           }
@@ -560,19 +567,16 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         case "death": {
           const t = Math.min(elapsed / DEATH_MS, 1);
           f.deathAngle = (Math.PI / 2) * t;
-          f.deathOpacity = 1 - t;
+          f.deathOpacity = Math.max(0, 1 - t * 0.92);
           break;
         }
         case "idle": {
-          // animation handled by getFrameIndex
           break;
         }
       }
 
-      f.hpDisplay += (f.hpTarget - f.hpDisplay) * 0.15;
+      f.hpDisplay += (f.hpTarget - f.hpDisplay) * 0.12;
     }
-
-    // â”€â”€ Main loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     let lastTime = 0;
     let rafId = 0;
@@ -583,26 +587,22 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
       if (phaseStart === 0) {
         phaseStart = now;
-        nextHitAt = now + 800;
+        nextHitAt = now + 900;
       }
 
-      // â”€â”€ Phase: intro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (phase === "intro") {
         const gap = p2.x - p1.x;
         if (gap > FIGHT_GAP) {
           updateFighter(p1, now, dt);
           updateFighter(p2, now, dt);
         } else {
-          p1.state = "idle";
-          p1.stateStart = now;
-          p2.state = "idle";
-          p2.stateStart = now;
+          p1.state = "idle"; p1.stateStart = now;
+          p2.state = "idle"; p2.stateStart = now;
           phase = "fight";
-          nextHitAt = now + 200;
+          nextHitAt = now + 280;
         }
       }
 
-      // â”€â”€ Phase: fight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (phase === "fight" || phase === "waiting") {
         if (now >= nextHitAt && logIdx < log.length) {
           const entry = log[logIdx];
@@ -612,23 +612,24 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           const attacker = entry.attacker === "p1" ? p1 : p2;
           const defender = entry.attacker === "p1" ? p2 : p1;
 
+          attacker.attackLungeMs   = entry.isCrit ? CRIT_LUNGE_MS   : ATTACK_LUNGE_MS;
+          attacker.attackRetractMs = entry.isCrit ? CRIT_RETRACT_MS : ATTACK_RETRACT_MS;
           attacker.state = "attack";
           attacker.stateStart = now;
 
+          const lungeSnapshot = attacker.attackLungeMs;
+
           setTimeout(() => {
             const perfNow = performance.now();
-            triggerHit(defender, perfNow);
+            triggerHit(defender, perfNow, entry.isCrit);
             spawnSlash(attacker, defender, entry.isCrit, entry.isCombo && entry.comboStep >= 2, perfNow);
             spawnDamageNum(defender, entry.damage, entry.isCrit, perfNow);
             p1.hpTarget = entry.hp1After;
             p2.hpTarget = entry.hp2After;
 
-            // ── Fight SFX — mirrors FightReplay.tsx pattern ──────────────
-            // Crit: charge-up plays on attacker; hit plays on defender impact (same frame here)
-            // Normal hit: just the hit sound
-            if (entry.isCrit) {
-              audio?.playSfx("crit");
-            }
+            if (entry.isCrit) shakeStart = perfNow;
+
+            if (entry.isCrit) audio?.playSfx("crit");
             audio?.playSfx("hit");
 
             if (entry.hp1After <= 0 && p1.alive) {
@@ -639,11 +640,11 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
               p2.alive = false;
               setTimeout(() => { p2.state = "death"; p2.stateStart = performance.now(); audio?.playSfx("death"); }, HIT_FLASH_MS);
             }
-          }, ATTACK_LUNGE_MS);
+          }, lungeSnapshot);
 
           const isComboHit = entry.isCombo && entry.comboStep >= 2;
-          const fullAttackMs = ATTACK_LUNGE_MS + ATTACK_RETRACT_MS;
-          const gapAfter = isComboHit ? COMBO_GAP_MS : NORMAL_GAP_MS;
+          const fullAttackMs = attacker.attackLungeMs + attacker.attackRetractMs;
+          const gapAfter = entry.isCrit ? CRIT_GAP_MS : (isComboHit ? COMBO_GAP_MS : NORMAL_GAP_MS);
 
           if (entry.hp1After <= 0 || entry.hp2After <= 0) {
             nextHitAt = now + fullAttackMs + DEATH_MS + POST_DEATH_MS;
@@ -660,7 +661,6 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         updateFighter(p2, now, dt);
       }
 
-      // â”€â”€ Phase: death â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (phase === "death") {
         updateFighter(p1, now, dt);
         updateFighter(p2, now, dt);
@@ -672,7 +672,6 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         }
       }
 
-      // â”€â”€ Phase: done â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (phase === "done" && !doneCalledRef.current) {
         doneCalledRef.current = true;
         cancelAnimationFrame(rafId);
@@ -686,7 +685,16 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     }
 
     function draw(now: number) {
-      ctx.clearRect(0, 0, W, H);
+      ctx.save();
+
+      const shakeT = shakeStart > 0 ? Math.max(0, 1 - (now - shakeStart) / SHAKE_DUR) : 0;
+      if (shakeT > 0) {
+        const sx = shakeT * SHAKE_MAG * (Math.random() * 2 - 1);
+        const sy = shakeT * SHAKE_MAG * (Math.random() * 2 - 1);
+        ctx.translate(sx, sy);
+      }
+
+      ctx.clearRect(-SHAKE_MAG, -SHAKE_MAG, W + SHAKE_MAG * 2, H + SHAKE_MAG * 2);
       drawArena(now);
       drawHpBars();
       drawVFX(now);
@@ -694,6 +702,8 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       drawFighter(p2, now);
       drawDamageNums(now);
       drawHitCounter();
+
+      ctx.restore();
     }
 
     function startAnimation() {
