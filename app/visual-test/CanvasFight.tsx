@@ -407,6 +407,19 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const srcW = SPRITE_FRAME_W;
       const srcH = (anim === "death") ? SPRITE_FRAME_H : SPRITE_SRC_H;
 
+      // Ground shadow — drawn before character so it appears underneath
+      // Smaller/dimmer during death to feel like they're falling
+      if (f.state !== "death") {
+        ctx.save();
+        const shadowAlpha = f.state === "hit" ? 0.12 : 0.20;
+        ctx.globalAlpha = shadowAlpha;
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.ellipse(cx, FLOOR_Y + 3, CHAR_W * 0.45, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       ctx.save();  // outer: death rotation + opacity
       ctx.globalAlpha = f.state === "death" ? f.deathOpacity : 1;
 
