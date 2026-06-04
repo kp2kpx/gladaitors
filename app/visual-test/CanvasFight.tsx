@@ -28,10 +28,10 @@ const SPRITE_FRAMES  = 8;
 // The sheet has a large transparent gap Y=511-870 between torso and legs.
 // Rendering the full height causes floating torso with detached legs artefact.
 // Portrait bust is a deliberate design choice — clean readable gladiator figure.
-// Full-body crop: Y=50 to Y=1100 captures the entire character including head, torso, and legs.
-// Pixel scan confirmed art spans Y=51-1185 with uniform density throughout frame 4.
-const SPRITE_SRC_Y = 50;
-const SPRITE_SRC_H = 1050;  // Y=50 to Y=1100 — full body
+// Head + torso crop: Y=100 to Y=600 captures head, torso and weapon arm clearly.
+// Full-body was too compressed vertically (3.28x). Portrait-torso at 1.56x compression looks better.
+const SPRITE_SRC_Y = 100;
+const SPRITE_SRC_H = 500;   // Y=100 to Y=600 — head + torso + weapon arm
 
 type AnimName = "idle" | "attack" | "hit" | "death";
 
