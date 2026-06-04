@@ -273,6 +273,10 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     let critFlashBorn = 0;
     const CRIT_SCREEN_DUR = 280;
 
+    // Death vignette - darkens arena slowly when someone dies
+    let deathVignetteStart = 0;
+    const DEATH_VIGNETTE_DUR = DEATH_MS + POST_DEATH_MS;
+
     // Combo counter
     interface ComboText {
       x: number;
@@ -439,7 +443,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.restore();
     }
 
-    function drawHpBars() {
+    function drawHpBars(now: number) {
       ctx.font = "bold 10px monospace";
       ctx.fillStyle = "#e8dcc8";
       ctx.textAlign = "left";
@@ -450,7 +454,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.fillRect(20, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       ctx.strokeRect(20, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp1w = Math.max(0, HP_BAR_W * p1.hpDisplay / 100);
-      const hp1LowWarning = p1.hpDisplay < 25 ? Math.abs(Math.sin(performance.now() / 200)) : 1;
+      const hp1LowWarning = p1.hpDisplay < 25 ? Math.abs(Math.sin(now / 200)) : 1;
       const g1 = ctx.createLinearGradient(20, 0, 20 + HP_BAR_W, 0);
       if (p1.hpDisplay < 25) {
         g1.addColorStop(0, `rgba(255,${Math.floor(100 * hp1LowWarning)},0,1)`);
@@ -469,7 +473,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.fillRect(280, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       ctx.strokeRect(280, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp2w = Math.max(0, HP_BAR_W * p2.hpDisplay / 100);
-      const hp2LowWarning = p2.hpDisplay < 25 ? Math.abs(Math.sin(performance.now() / 200)) : 1;
+      const hp2LowWarning = p2.hpDisplay < 25 ? Math.abs(Math.sin(now / 200)) : 1;
       const g2 = ctx.createLinearGradient(280, 0, 280 + HP_BAR_W, 0);
       if (p2.hpDisplay < 25) {
         g2.addColorStop(0, "#3b82f6");
@@ -713,6 +717,24 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       }
     }
 
+    function drawDeathVignette(now: number) {
+      if (deathVignetteStart === 0) return;
+      const elapsed = now - deathVignetteStart;
+      if (elapsed >= DEATH_VIGNETTE_DUR) return;
+      const t = Math.min(elapsed / DEATH_VIGNETTE_DUR, 1);
+      // Slowly deepen the darkness over the death duration
+      const opacity = t * 0.35;
+      ctx.save();
+      ctx.globalAlpha = opacity;
+      // Dark reddish vignette from edges
+      const dv = ctx.createRadialGradient(W / 2, H / 2, H * 0.1, W / 2, H / 2, H * 0.75);
+      dv.addColorStop(0, "rgba(0,0,0,0)");
+      dv.addColorStop(1, "rgba(20,0,0,1)");
+      ctx.fillStyle = dv;
+      ctx.fillRect(-SHAKE_MAG, -SHAKE_MAG, W + SHAKE_MAG * 2, H + SHAKE_MAG * 2);
+      ctx.restore();
+    }
+
     function drawCritScreenFlash(now: number) {
       if (critFlashBorn === 0) return;
       const elapsed = now - critFlashBorn;
@@ -798,11 +820,11 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
             if (entry.hp1After <= 0 && p1.alive) {
               p1.alive = false;
-              setTimeout(() => { p1.state = "death"; p1.stateStart = performance.now(); audio?.playSfx("death"); }, HIT_FLASH_MS);
+              setTimeout(() => { p1.state = "death"; p1.stateStart = performance.now(); deathVignetteStart = performance.now(); audio?.playSfx("death"); }, HIT_FLASH_MS);
             }
             if (entry.hp2After <= 0 && p2.alive) {
               p2.alive = false;
-              setTimeout(() => { p2.state = "death"; p2.stateStart = performance.now(); audio?.playSfx("death"); }, HIT_FLASH_MS);
+              setTimeout(() => { p2.state = "death"; p2.stateStart = performance.now(); deathVignetteStart = performance.now(); audio?.playSfx("death"); }, HIT_FLASH_MS);
             }
           }, lungeSnapshot);
 
@@ -868,7 +890,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
       ctx.clearRect(-SHAKE_MAG, -SHAKE_MAG, W + SHAKE_MAG * 2, H + SHAKE_MAG * 2);
       drawArena(now);
-      drawHpBars();
+      drawHpBars(now);
       drawVFX(now);
       drawFighter(p1, now);
       drawFighter(p2, now);
@@ -876,6 +898,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       drawHitCounter();
       drawComboTexts(now);
       drawOverlayText(now);
+      drawDeathVignette(now);
       drawCritScreenFlash(now);
 
       ctx.restore();
@@ -908,6 +931,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     />
   );
 }
+
 
 
 
