@@ -84,7 +84,7 @@ const FLOOR_Y = 268;
 const CHAR_H = H * 0.75;           // 240px tall
 const CHAR_W = CHAR_H * 0.45;      // 108px wide (over-scaled for visual impact)
 
-const FIGHT_GAP = 120;
+const FIGHT_GAP = 160;
 const HP_BAR_W = 180;
 const HP_BAR_H = 12;
 const HP_BAR_Y = 16;
@@ -228,7 +228,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     // P1 starts left, P2 starts right - they walk toward each other
     const p1: Fighter = {
-      x: 80, baseX: 80, y: FLOOR_Y - CHAR_H,
+      x: 60, baseX: 60, y: FLOOR_Y - CHAR_H,
       state: "walk", stateStart: 0, attackDir: 1,
       lungeOffset: 0, knockOffset: 0, knockDir: -1,
       deathAngle: 0, deathOpacity: 1,
@@ -239,7 +239,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     };
 
     const p2: Fighter = {
-      x: 400, baseX: 400, y: FLOOR_Y - CHAR_H,
+      x: 420, baseX: 420, y: FLOOR_Y - CHAR_H,
       state: "walk", stateStart: 0, attackDir: -1,
       lungeOffset: 0, knockOffset: 0, knockDir: 1,
       deathAngle: 0, deathOpacity: 1,
@@ -546,7 +546,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       switch (f.state) {
         case "walk": {
           const dir = f.side === "p1" ? 1 : -1;
-          f.x += dir * 80 * (dt / 1000);
+          f.x += dir * 60 * (dt / 1000);
           break;
         }
         case "attack": {
@@ -606,7 +606,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
       if (phaseStart === 0) {
         phaseStart = now;
-        nextHitAt = now + 900;
+        nextHitAt = now + 1200;
       }
 
       if (phase === "intro") {
@@ -752,3 +752,4 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     />
   );
 }
+
