@@ -24,11 +24,12 @@ const SPRITE_FRAME_W = 106;
 const SPRITE_FRAME_H = 1186;
 const SPRITE_FRAMES  = 8;
 
-// No crop - use full frame so all character parts (head, body, feet) align correctly.
-// The character art is scattered throughout the 1186px height with transparent gaps
-// between parts. Cropping breaks alignment. We render the full frame and scale.
-const SPRITE_SRC_Y = 0;
-const SPRITE_SRC_H = SPRITE_FRAME_H;
+// Source crop: render only the art content region (Y=150 to Y=1100) for non-death anims.
+// Top 150px and bottom 86px of each frame are fully transparent dead zones.
+// Eliminating them means 950px of actual art scales into the full 240px destH
+// instead of 1186px — characters appear ~25% taller and more readable on screen.
+const SPRITE_SRC_Y = 150;
+const SPRITE_SRC_H = 950;
 
 type AnimName = "idle" | "attack" | "hit" | "death";
 
@@ -393,13 +394,17 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const destW = CHAR_W;
       const destH = CHAR_H;
 
-      // Use full sprite frame - no crop
+      // Crop to art content region for all anims except death.
+      // Death uses full 1186px frame so the fall pivot/rotation stays correct.
+      // For all other anims: Y=150-1100 (950px) contains all art (head/torso/legs/feet).
+      // Rendering 1186px into 240px destH with 236px of transparent dead zone wastes scale.
+      // Rendering 950px of actual art into 240px destH makes figures ~25% larger on screen.
       const srcX = frameIdx * SPRITE_FRAME_W;
-      const srcY = SPRITE_SRC_Y;
+      const srcY = (anim === "death") ? 0 : SPRITE_SRC_Y;
       const srcW = SPRITE_FRAME_W;
-      const srcH = SPRITE_SRC_H;
+      const srcH = (anim === "death") ? SPRITE_FRAME_H : SPRITE_SRC_H;
 
-      ctx.save();
+      ctx.save();  // outer: death rotation + opacity
       ctx.globalAlpha = f.state === "death" ? f.deathOpacity : 1;
 
       if (f.state === "death") {
@@ -411,24 +416,17 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         ctx.translate(-pivotX, -pivotY);
       }
 
-      if (f.state === "hit") {
-        const elapsed = now - f.stateStart;
-        const flashDur = f.isCritHit ? CRIT_FLASH_MS : HIT_FLASH_MS;
-        if (elapsed < flashDur) {
-          ctx.fillStyle = f.isCritHit ? "rgba(255, 200, 50, 0.88)" : "rgba(255, 255, 255, 0.85)";
-          ctx.fillRect(destX, destY, destW, destH);
-          ctx.restore();
-          return;
-        }
-      }
+      // NOTE: early-return hit flash removed. Sprite is ALWAYS drawn first.
 
       if (filter) ctx.filter = filter;
 
       if (img && img.complete && img.naturalWidth > 0) {
         if (f.side === "p2") {
+          ctx.save();  // inner: flip only — released before overlay so overlay draws in normal coords
           ctx.translate(cx + CHAR_W / 2, 0);
           ctx.scale(-1, 1);
           ctx.drawImage(img, srcX, srcY, srcW, srcH, -CHAR_W / 2, destY, destW, destH);
+          ctx.restore();  // release flip
         } else {
           ctx.drawImage(img, srcX, srcY, srcW, srcH, destX, destY, destW, destH);
         }
@@ -440,7 +438,23 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       }
 
       ctx.filter = "none";
-      ctx.restore();
+
+      // Hit flash overlay — drawn AFTER sprite, semi-transparent only.
+      // The character is always visible underneath; the flash is a brief shimmer on top.
+      // Flash fades out over its duration: strongest at impact (t=0), gone at t=1.
+      if (f.state === "hit") {
+        const elapsed = now - f.stateStart;
+        const flashDur = f.isCritHit ? CRIT_FLASH_MS : HIT_FLASH_MS;
+        if (elapsed < flashDur) {
+          const flashOpacity = (1 - elapsed / flashDur) * (f.isCritHit ? 0.55 : 0.42);
+          ctx.globalAlpha = flashOpacity;
+          ctx.fillStyle = f.isCritHit ? "rgba(255, 200, 50, 1)" : "rgba(255, 255, 255, 1)";
+          ctx.fillRect(destX, destY, destW, destH);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      ctx.restore();  // outer
     }
 
     function drawHpBars(now: number) {
@@ -879,6 +893,11 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     }
 
     function draw(now: number) {
+      // Clear FIRST at raw canvas origin before any transforms.
+      // clearRect after ctx.translate clears in transformed space only — old frame pixels
+      // remain visible on the canvas, causing multi-frame ghosting every rAF tick.
+      ctx.clearRect(0, 0, W, H);
+
       ctx.save();
 
       const shakeT = shakeStart > 0 ? Math.max(0, 1 - (now - shakeStart) / SHAKE_DUR) : 0;
@@ -887,8 +906,6 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         const sy = shakeT * SHAKE_MAG * (Math.random() * 2 - 1);
         ctx.translate(sx, sy);
       }
-
-      ctx.clearRect(-SHAKE_MAG, -SHAKE_MAG, W + SHAKE_MAG * 2, H + SHAKE_MAG * 2);
       drawArena(now);
       drawHpBars(now);
       drawVFX(now);
