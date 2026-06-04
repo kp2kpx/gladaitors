@@ -5,7 +5,7 @@
 // cinematic timing, screen shake, crit slo-mo, arena depth, dramatic death.
 // Branch: visual-upgrade
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FightResult, RoundLog } from "@/lib/fight-engine";
 import { useFightAudio } from "@/lib/useAudio";
 
@@ -67,22 +67,9 @@ const ANIM_LOOPS: Record<AnimName, boolean> = {
   death:  false,
 };
 
-// -- Canvas dimensions --------------------------------------------------------
-
-const W = 800;
-const H = 400;
-const FLOOR_Y = Math.round(H * 0.88);  // 352px — feet near bottom
-
-// Character dimensions: 310px tall fills ~78% of 400px canvas height.
-// Source art crop is 106px wide x 950px content (Y=150-1100).
-// At CHAR_H=310, CHAR_W=102px keeps proportions close to source aspect ratio.
-const CHAR_H = 310;
-const CHAR_W = Math.round(CHAR_H * 0.33);  // ~102px wide
-
-const FIGHT_GAP = 240;
-const HP_BAR_W = 240;
-const HP_BAR_H = 12;
-const HP_BAR_Y = 16;
+// -- Canvas dimensions (computed at runtime from container) ------------------
+// W, H, FLOOR_Y, CHAR_H, CHAR_W, FIGHT_GAP, HP_BAR_W, HP_BAR_H, HP_BAR_Y, SHAKE_MAG
+// are declared as local constants inside the animation useEffect, based on canvasDims.
 
 // -- Timing constants ---------------------------------------------------------
 
@@ -102,7 +89,7 @@ const CRIT_GAP_MS       = 600;
 const DEATH_MS      = 1400;
 const POST_DEATH_MS = 1800;
 
-const SHAKE_MAG = 10;
+// SHAKE_MAG computed inside useEffect from canvas width
 const SHAKE_DUR = 320;
 
 // -- VFX types ----------------------------------------------------------------
@@ -162,14 +149,38 @@ type SpriteKey = string;
 
 export default function CanvasFight({ result, p1Color, p2Color, onDone }: CanvasFightProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const doneCalledRef = useRef(false);
+  const [canvasDims, setCanvasDims] = useState({ w: 800, h: 400 });
   const audio = useFightAudio();
 
   useEffect(() => {
     audio?.unlockAndPlay();
   }, [audio?.unlockAndPlay]);
 
+  // Measure container width on mount to set responsive canvas dimensions
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const w = Math.min(el.clientWidth, 800);
+    const h = Math.round(w * 0.5);
+    setCanvasDims({ w, h });
+  }, []);
+
+  useEffect(() => {
+    // --- Responsive canvas dimensions (computed from container width at mount) ---
+    const W = canvasDims.w;
+    const H = canvasDims.h;
+    const FLOOR_Y = Math.round(H * 0.88);
+    const CHAR_H = Math.round(H * 0.82);
+    const CHAR_W = Math.round(W * 0.20);      // 20% of canvas width — readable at all sizes
+    const FIGHT_GAP = Math.round(W * 0.32);
+    const HP_BAR_W = Math.round(W * 0.30);
+    const HP_BAR_H = 12;
+    const HP_BAR_Y = 16;
+    const SHAKE_MAG = Math.round(W * 0.012);
+    // -------------------------------------------------------------------------
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctxOrNull = canvas.getContext("2d");
@@ -223,7 +234,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     // P1 starts left, P2 starts right - they walk toward each other
     const p1: Fighter = {
-      x: 100, baseX: 100, y: FLOOR_Y - CHAR_H,
+      x: Math.round(W * 0.12), baseX: Math.round(W * 0.12), y: FLOOR_Y - CHAR_H,
       state: "walk", stateStart: 0, attackDir: 1,
       lungeOffset: 0, knockOffset: 0, knockDir: -1,
       deathAngle: 0, deathOpacity: 1,
@@ -234,7 +245,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     };
 
     const p2: Fighter = {
-      x: 700, baseX: 700, y: FLOOR_Y - CHAR_H,
+      x: Math.round(W * 0.88), baseX: Math.round(W * 0.88), y: FLOOR_Y - CHAR_H,
       state: "walk", stateStart: 0, attackDir: -1,
       lungeOffset: 0, knockOffset: 0, knockDir: 1,
       deathAngle: 0, deathOpacity: 1,
@@ -283,7 +294,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     const comboTexts: ComboText[] = [];
 
     const crowd = Array.from({ length: 28 }, () => ({
-      x: 40 + Math.random() * 720,
+      x: 40 + Math.random() * (W - 80),
       y: 40 + Math.random() * 60,
       r: 2.5 + Math.random() * 3,
       c: `rgba(${60 + Math.floor(Math.random() * 30)},${40 + Math.floor(Math.random() * 15)},${30 + Math.floor(Math.random() * 10)},${(0.25 + Math.random() * 0.2).toFixed(2)})`,
@@ -335,7 +346,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.fillRect(0, 0, W, H);
 
       // Center spotlight
-      const spotlight = ctx.createRadialGradient(W / 2, FLOOR_Y - 40, 0, W / 2, FLOOR_Y - 40, 240);
+      const spotlight = ctx.createRadialGradient(W / 2, FLOOR_Y - 40, 0, W / 2, FLOOR_Y - 40, Math.round(W * 0.30));
       spotlight.addColorStop(0, "rgba(255, 240, 180, 0.08)");
       spotlight.addColorStop(1, "rgba(255, 240, 180, 0)");
       ctx.fillStyle = spotlight;
@@ -390,6 +401,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const destY = FLOOR_Y - CHAR_H + cropBottomOffset + bobAmt;
       const destW = CHAR_W;
       const destH = CHAR_H;
+      let spriteDrawn = false;  // tracks whether sprite was actually rendered this frame
 
       // Crop to art content region for all anims except death.
       // Death uses full 1186px frame so the fall pivot/rotation stays correct.
@@ -440,6 +452,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         } else {
           ctx.drawImage(img, srcX, srcY, srcW, srcH, destX, destY, destW, destH);
         }
+        spriteDrawn = true;  // sprite was actually drawn this frame
       } else {
         if (filter) ctx.filter = "none";
         const fallback: Record<FighterColor, string> = { red: "#c47070", blue: "#6090c8", gold: "#b8860b" };
@@ -450,9 +463,9 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.filter = "none";
 
       // Hit flash overlay — drawn AFTER sprite, semi-transparent only.
-      // The character is always visible underneath; the flash is a brief shimmer on top.
-      // Flash fades out over its duration: strongest at impact (t=0), gone at t=1.
-      if (f.state === "hit") {
+      // Only drawn if sprite was actually rendered this frame (spriteDrawn guard).
+      // Prevents solid flash box appearing when image is not yet loaded.
+      if (spriteDrawn && f.state === "hit") {
         const elapsed = now - f.stateStart;
         const flashDur = f.isCritHit ? CRIT_FLASH_MS : HIT_FLASH_MS;
         if (elapsed < flashDur) {
@@ -471,15 +484,17 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.font = "bold 10px monospace";
       ctx.fillStyle = "#e8dcc8";
       ctx.textAlign = "left";
-      ctx.fillText("P1", 30, HP_BAR_Y - 3);
+      const p1BarX = Math.round(W * 0.04);
+      const p2BarX = W - Math.round(W * 0.04) - HP_BAR_W;
+      ctx.fillText("P1", p1BarX, HP_BAR_Y - 3);
       ctx.fillStyle = "#1c1608";
       ctx.strokeStyle = "#2a2218";
       ctx.lineWidth = 1;
-      ctx.fillRect(30, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
-      ctx.strokeRect(30, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+      ctx.fillRect(p1BarX, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+      ctx.strokeRect(p1BarX, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp1w = Math.max(0, HP_BAR_W * p1.hpDisplay / 100);
       const hp1LowWarning = p1.hpDisplay < 25 ? Math.abs(Math.sin(now / 200)) : 1;
-      const g1 = ctx.createLinearGradient(20, 0, 20 + HP_BAR_W, 0);
+      const g1 = ctx.createLinearGradient(p1BarX, 0, p1BarX + HP_BAR_W, 0);
       if (p1.hpDisplay < 25) {
         g1.addColorStop(0, `rgba(255,${Math.floor(100 * hp1LowWarning)},0,1)`);
         g1.addColorStop(1, "#8b1a1a");
@@ -487,18 +502,18 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         g1.addColorStop(0, "#e05555"); g1.addColorStop(1, "#8b1a1a");
       }
       ctx.fillStyle = g1;
-      ctx.fillRect(30, HP_BAR_Y, hp1w, HP_BAR_H);
+      ctx.fillRect(p1BarX, HP_BAR_Y, hp1w, HP_BAR_H);
 
       ctx.fillStyle = "#e8dcc8";
       ctx.textAlign = "right";
-      ctx.fillText("P2", 770, HP_BAR_Y - 3);
+      ctx.fillText("P2", p2BarX + HP_BAR_W, HP_BAR_Y - 3);
       ctx.fillStyle = "#1c1608";
       ctx.strokeStyle = "#2a2218";
-      ctx.fillRect(530, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
-      ctx.strokeRect(530, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+      ctx.fillRect(p2BarX, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
+      ctx.strokeRect(p2BarX, HP_BAR_Y, HP_BAR_W, HP_BAR_H);
       const hp2w = Math.max(0, HP_BAR_W * p2.hpDisplay / 100);
       const hp2LowWarning = p2.hpDisplay < 25 ? Math.abs(Math.sin(now / 200)) : 1;
-      const g2 = ctx.createLinearGradient(530, 0, 530 + HP_BAR_W, 0);
+      const g2 = ctx.createLinearGradient(p2BarX, 0, p2BarX + HP_BAR_W, 0);
       if (p2.hpDisplay < 25) {
         g2.addColorStop(0, "#3b82f6");
         g2.addColorStop(1, `rgba(255,${Math.floor(100 * hp2LowWarning)},0,1)`);
@@ -506,7 +521,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         g2.addColorStop(0, "#60a0e8"); g2.addColorStop(1, "#1e3a8a");
       }
       ctx.fillStyle = g2;
-      ctx.fillRect(530 + HP_BAR_W - hp2w, HP_BAR_Y, hp2w, HP_BAR_H);
+      ctx.fillRect(p2BarX + HP_BAR_W - hp2w, HP_BAR_Y, hp2w, HP_BAR_H);
     }
 
     function drawVFX(now: number) {
@@ -938,24 +953,24 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     return () => {
       cancelAnimationFrame(rafId);
     };
-  }, [result, p1Color, p2Color, onDone]);
+  }, [result, p1Color, p2Color, onDone, canvasDims]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={W}
-      height={H}
-      style={{
-        width: "100%",
-        maxWidth: `${W}px`,
-        height: "auto",
-        display: "block",
-        margin: "0 auto",
-        imageRendering: "pixelated",
-        borderRadius: "4px",
-        border: "1px solid #2a2218",
-      }}
-    />
+    <div ref={containerRef} style={{ width: "100%" }}>
+      <canvas
+        ref={canvasRef}
+        width={canvasDims.w}
+        height={canvasDims.h}
+        style={{
+          width: "100%",
+          height: "auto",
+          display: "block",
+          imageRendering: "pixelated",
+          borderRadius: "4px",
+          border: "1px solid #2a2218",
+        }}
+      />
+    </div>
   );
 }
 
