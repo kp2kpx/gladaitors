@@ -24,12 +24,12 @@ const SPRITE_FRAME_W = 106;
 const SPRITE_FRAME_H = 1186;
 const SPRITE_FRAMES  = 8;
 
-// Source crop: render only the art content region (Y=150 to Y=1100) for non-death anims.
-// Top 150px and bottom 86px of each frame are fully transparent dead zones.
-// Eliminating them means 950px of actual art scales into the full 240px destH
-// instead of 1186px — characters appear ~25% taller and more readable on screen.
+// Portrait crop: Y=150 to Y=560 (head, torso, weapon arm only).
+// The sheet has a large transparent gap Y=511-870 between torso and legs.
+// Rendering the full height causes floating torso with detached legs artefact.
+// Portrait bust is a deliberate design choice — clean readable gladiator figure.
 const SPRITE_SRC_Y = 150;
-const SPRITE_SRC_H = 950;
+const SPRITE_SRC_H = 410;   // Y=150 to Y=560
 
 type AnimName = "idle" | "attack" | "hit" | "death";
 
@@ -171,10 +171,13 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     // --- Responsive canvas dimensions (computed from container width at mount) ---
     const W = canvasDims.w;
     const H = canvasDims.h;
-    const FLOOR_Y = Math.round(H * 0.88);
-    const CHAR_H = Math.round(H * 0.82);
-    const CHAR_W = Math.round(W * 0.20);      // 20% of canvas width — readable at all sizes
-    const FIGHT_GAP = Math.round(W * 0.32);
+    const FLOOR_Y    = Math.round(H * 0.88);
+    const CHAR_H     = Math.round(H * 0.75);
+    const CHAR_W     = Math.round(CHAR_H * 0.35);  // proportional to height, not canvas width
+    const FIGHT_GAP  = Math.round(W * 0.32);
+    // BASE_DEST_Y: top of character. Feet land at FLOOR_Y. No offset compensation needed
+    // because portrait crop (Y=150-560) doesn't have a bottom transparent dead zone.
+    const BASE_DEST_Y = FLOOR_Y - CHAR_H;
     const HP_BAR_W = Math.round(W * 0.30);
     const HP_BAR_H = 12;
     const HP_BAR_Y = 16;
@@ -308,7 +311,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       // VFX anchored to defender's torso: ~55% up from floor
       vfxList.push({
         x: fightX(defender),
-        y: FLOOR_Y - CHAR_H * 0.55 + 17, // +17 = cropBottomOffset compensation
+        y: BASE_DEST_Y + CHAR_H * 0.40,
         born: now,
         duration: isCrit ? 450 : 200,
         lineLen: isCrit ? 65 : 32,
@@ -320,7 +323,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     function spawnDamageNum(defender: Fighter, damage: number, isCrit: boolean, now: number) {
       const ix = fightX(defender) + (Math.random() * 24 - 12);
-      const iy = FLOOR_Y - CHAR_H * 0.72 + 17; // +17 = cropBottomOffset compensation
+      const iy = BASE_DEST_Y + CHAR_H * 0.20;
       damageNums.push({
         x: ix, y: iy, startY: iy, born: now,
         text: isCrit ? `CRIT! +${damage}` : `+${damage}`,
@@ -392,22 +395,14 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const img = getSpriteImage(f.color, anim);
       const filter = COLOR_TO_FILTER[f.color];
 
-      const destX = cx - CHAR_W / 2;
       // Idle bob: gentle up/down float when standing still
       const bobAmt = (f.state === "idle" && f.alive) ? Math.sin(now / 600) * 2.5 : 0;
-      // cropBottomOffset: eliminates the 17px float caused by the transparent dead zone
-      // at the bottom of the sprite frame (86px / 1186px * 240px destH = ~17px).
-      const cropBottomOffset = Math.round((SPRITE_FRAME_H - (SPRITE_SRC_Y + SPRITE_SRC_H)) / SPRITE_FRAME_H * CHAR_H);
-      const destY = FLOOR_Y - CHAR_H + cropBottomOffset + bobAmt;
-      const destW = CHAR_W;
-      const destH = CHAR_H;
-      let spriteDrawn = false;  // tracks whether sprite was actually rendered this frame
+      const destX = cx - CHAR_W / 2;
+      const destY = BASE_DEST_Y + bobAmt;
+      let spriteDrawn = false;
 
-      // Crop to art content region for all anims except death.
-      // Death uses full 1186px frame so the fall pivot/rotation stays correct.
-      // For all other anims: Y=150-1100 (950px) contains all art (head/torso/legs/feet).
-      // Rendering 1186px into 240px destH with 236px of transparent dead zone wastes scale.
-      // Rendering 950px of actual art into 240px destH makes figures ~25% larger on screen.
+      // Portrait crop for all anims except death.
+      // Death uses full 1186px frame so the falling rotation pivot stays correct.
       const srcX = frameIdx * SPRITE_FRAME_W;
       const srcY = (anim === "death") ? 0 : SPRITE_SRC_Y;
       const srcW = SPRITE_FRAME_W;
@@ -444,20 +439,22 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
       if (img && img.complete && img.naturalWidth > 0) {
         if (f.side === "p2") {
-          ctx.save();  // inner: flip only — released before overlay so overlay draws in normal coords
-          ctx.translate(cx + CHAR_W / 2, 0);
+          // Flip P2 horizontally: translate to right edge of dest rect, scale(-1,1),
+          // draw at (-CHAR_W, 0). Result: sprite renders at destX..destX+CHAR_W (same as P1) but mirrored.
+          ctx.save();
+          ctx.translate(destX + CHAR_W, destY);
           ctx.scale(-1, 1);
-          ctx.drawImage(img, srcX, srcY, srcW, srcH, -CHAR_W / 2, destY, destW, destH);
-          ctx.restore();  // release flip
+          ctx.drawImage(img, srcX, srcY, SPRITE_FRAME_W, srcH, -CHAR_W, 0, CHAR_W, CHAR_H);
+          ctx.restore();
         } else {
-          ctx.drawImage(img, srcX, srcY, srcW, srcH, destX, destY, destW, destH);
+          ctx.drawImage(img, srcX, srcY, SPRITE_FRAME_W, srcH, destX, destY, CHAR_W, CHAR_H);
         }
         spriteDrawn = true;  // sprite was actually drawn this frame
       } else {
         if (filter) ctx.filter = "none";
         const fallback: Record<FighterColor, string> = { red: "#c47070", blue: "#6090c8", gold: "#b8860b" };
         ctx.fillStyle = fallback[f.color];
-        ctx.fillRect(destX, destY + destH * 0.1, destW, destH * 0.9);
+        ctx.fillRect(destX, destY + CHAR_H * 0.1, CHAR_W, CHAR_H * 0.9);
       }
 
       ctx.filter = "none";
@@ -469,11 +466,12 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         const elapsed = now - f.stateStart;
         const flashDur = f.isCritHit ? CRIT_FLASH_MS : HIT_FLASH_MS;
         if (elapsed < flashDur) {
-          const flashOpacity = (1 - elapsed / flashDur) * (f.isCritHit ? 0.55 : 0.42);
-          ctx.globalAlpha = flashOpacity;
-          ctx.fillStyle = f.isCritHit ? "rgba(255, 200, 50, 1)" : "rgba(255, 255, 255, 1)";
-          ctx.fillRect(destX, destY, destW, destH);
-          ctx.globalAlpha = 1;
+          const flashProgress = elapsed / flashDur;
+          ctx.save();
+          ctx.globalAlpha = 0.4 * (1 - flashProgress);
+          ctx.fillStyle = f.isCritHit ? "#ffcc00" : "#ffffff";
+          ctx.fillRect(destX, destY, CHAR_W, CHAR_H);
+          ctx.restore();
         }
       }
 
