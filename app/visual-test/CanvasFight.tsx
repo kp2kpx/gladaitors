@@ -1,8 +1,8 @@
 ﻿"use client";
 
 // --- CanvasFight -- Street Fighter-style canvas renderer ---------------------
-// Visual overhaul v1: cinematic timing, character visibility fix, screen shake,
-// crit slow-motion, arena depth, dramatic death.
+// Visual overhaul v2: fix character scale (full frame, no crop), proper sizing,
+// cinematic timing, screen shake, crit slo-mo, arena depth, dramatic death.
 // Branch: visual-upgrade
 
 import { useEffect, useRef } from "react";
@@ -21,12 +21,14 @@ interface CanvasFightProps {
 // -- Sprite sheet constants ---------------------------------------------------
 
 const SPRITE_FRAME_W = 106;
+const SPRITE_FRAME_H = 1186;
 const SPRITE_FRAMES  = 8;
 
-// Art crop: actual gladiator art does not fill the full 1186px height.
-// These values crop to only the visible art region.
-const SPRITE_ART_Y = 200;
-const SPRITE_ART_H = 750;
+// No crop - use full frame so all character parts (head, body, feet) align correctly.
+// The character art is scattered throughout the 1186px height with transparent gaps
+// between parts. Cropping breaks alignment. We render the full frame and scale.
+const SPRITE_SRC_Y = 0;
+const SPRITE_SRC_H = SPRITE_FRAME_H;
 
 type AnimName = "idle" | "attack" | "hit" | "death";
 
@@ -68,12 +70,21 @@ const ANIM_LOOPS: Record<AnimName, boolean> = {
 
 const W = 480;
 const H = 320;
-const FLOOR_Y = 258;
+const FLOOR_Y = 268;
 
-const CHAR_H = H * 0.58;
-const CHAR_W = CHAR_H * 0.40;
+// Character dimensions: CHAR_H must be large enough to show the full sprite.
+// The character art occupies ~88% of the 1186px frame height (Y~140 to Y~1185).
+// We need CHAR_H large enough so 88% of it shows meaningful character height.
+// At CHAR_H=240: character body appears ~210px tall = a proper visible gladiator.
+//
+// CHAR_W: the sprite's raw aspect ratio (106/1186 = 0.089) gives ~21px width at 240px height.
+// That's correct pixel art proportions but renders as a thin stick. We over-scale width
+// by ~5x to get a satisfying visual width while keeping the pixel art feel.
+// CHAR_W = 240 * 0.45 = 108px - wide enough to see, fits two fighters side by side.
+const CHAR_H = H * 0.75;           // 240px tall
+const CHAR_W = CHAR_H * 0.45;      // 108px wide (over-scaled for visual impact)
 
-const FIGHT_GAP = 140;
+const FIGHT_GAP = 120;
 const HP_BAR_W = 180;
 const HP_BAR_H = 12;
 const HP_BAR_Y = 16;
@@ -215,8 +226,9 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       return loops ? rawFrame % SPRITE_FRAMES : Math.min(rawFrame, SPRITE_FRAMES - 1);
     }
 
+    // P1 starts left, P2 starts right - they walk toward each other
     const p1: Fighter = {
-      x: 90, baseX: 90, y: FLOOR_Y - CHAR_H,
+      x: 80, baseX: 80, y: FLOOR_Y - CHAR_H,
       state: "walk", stateStart: 0, attackDir: 1,
       lungeOffset: 0, knockOffset: 0, knockDir: -1,
       deathAngle: 0, deathOpacity: 1,
@@ -227,7 +239,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     };
 
     const p2: Fighter = {
-      x: 390, baseX: 390, y: FLOOR_Y - CHAR_H,
+      x: 400, baseX: 400, y: FLOOR_Y - CHAR_H,
       state: "walk", stateStart: 0, attackDir: -1,
       lungeOffset: 0, knockOffset: 0, knockDir: 1,
       deathAngle: 0, deathOpacity: 1,
@@ -261,9 +273,10 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     }
 
     function spawnSlash(_attacker: Fighter, defender: Fighter, isCrit: boolean, isCombo: boolean, now: number) {
+      // VFX anchored to defender's torso: ~55% up from floor
       vfxList.push({
         x: fightX(defender),
-        y: FLOOR_Y - CHAR_H * 0.60,
+        y: FLOOR_Y - CHAR_H * 0.55,
         born: now,
         duration: isCrit ? 450 : 200,
         lineLen: isCrit ? 65 : 32,
@@ -275,7 +288,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
     function spawnDamageNum(defender: Fighter, damage: number, isCrit: boolean, now: number) {
       const ix = fightX(defender) + (Math.random() * 24 - 12);
-      const iy = FLOOR_Y - CHAR_H * 0.80;
+      const iy = FLOOR_Y - CHAR_H * 0.72;
       damageNums.push({
         x: ix, y: iy, startY: iy, born: now,
         text: isCrit ? `CRIT! +${damage}` : `+${damage}`,
@@ -300,12 +313,14 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, H);
 
-      const spotlight = ctx.createRadialGradient(W / 2, FLOOR_Y - 30, 0, W / 2, FLOOR_Y - 30, 140);
-      spotlight.addColorStop(0, "rgba(255, 240, 180, 0.07)");
+      // Center spotlight
+      const spotlight = ctx.createRadialGradient(W / 2, FLOOR_Y - 40, 0, W / 2, FLOOR_Y - 40, 160);
+      spotlight.addColorStop(0, "rgba(255, 240, 180, 0.08)");
       spotlight.addColorStop(1, "rgba(255, 240, 180, 0)");
       ctx.fillStyle = spotlight;
       ctx.fillRect(0, 0, W, H);
 
+      // Crowd dots
       for (const dot of crowd) {
         ctx.beginPath();
         ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
@@ -313,14 +328,16 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
         ctx.fill();
       }
 
+      // Floor line
       ctx.fillStyle = "#3a2e1e";
       ctx.fillRect(0, FLOOR_Y, W, 2);
 
+      // Stone floor texture
       ctx.save();
       ctx.globalAlpha = 0.15;
       ctx.strokeStyle = "#4a3a28";
       ctx.lineWidth = 1;
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= 4; i++) {
         ctx.beginPath();
         ctx.moveTo(0, FLOOR_Y + i * 9);
         ctx.lineTo(W, FLOOR_Y + i * 9);
@@ -328,6 +345,7 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       }
       ctx.restore();
 
+      // Vignette
       const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.8);
       vignette.addColorStop(0, "rgba(0,0,0,0)");
       vignette.addColorStop(1, "rgba(0,0,0,0.45)");
@@ -347,10 +365,11 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       const destW = CHAR_W;
       const destH = CHAR_H;
 
+      // Use full sprite frame - no crop
       const srcX = frameIdx * SPRITE_FRAME_W;
+      const srcY = SPRITE_SRC_Y;
       const srcW = SPRITE_FRAME_W;
-      const srcY = SPRITE_ART_Y;
-      const srcH = SPRITE_ART_H;
+      const srcH = SPRITE_SRC_H;
 
       ctx.save();
       ctx.globalAlpha = f.state === "death" ? f.deathOpacity : 1;
