@@ -261,6 +261,18 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     let nextHitAt = 0;
     let shakeStart = 0;
 
+    // Intro/outro overlay text state
+    let fightTextBorn = 0;        // timestamp when FIGHT! text appears
+    let winnerTextBorn = 0;       // timestamp when WINNER text appears
+    let winnerName = "";          // "P1" or "P2"
+    let winnerColor = "#e8dcc8";  // color for winner text
+    const FIGHT_TEXT_DUR = 900;   // ms FIGHT! text is visible
+    const WINNER_TEXT_DUR = 2400; // ms winner text is visible
+
+    // Crit warning flash state (brief full-screen red tint)
+    let critFlashBorn = 0;
+    const CRIT_SCREEN_DUR = 280;
+
     const crowd = Array.from({ length: 18 }, () => ({
       x: 30 + Math.random() * 420,
       y: 50 + Math.random() * 50,
@@ -597,6 +609,73 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       f.hpDisplay += (f.hpTarget - f.hpDisplay) * 0.12;
     }
 
+    function drawOverlayText(now: number) {
+      // FIGHT! text burst
+      if (fightTextBorn > 0) {
+        const elapsed = now - fightTextBorn;
+        if (elapsed < FIGHT_TEXT_DUR) {
+          const t = elapsed / FIGHT_TEXT_DUR;
+          const scale = t < 0.15 ? 0.5 + (t / 0.15) * 0.7 : 1.2 - (t - 0.15) * 0.3;
+          const opacity = t < 0.1 ? t / 0.1 : t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1;
+          ctx.save();
+          ctx.globalAlpha = opacity;
+          ctx.translate(W / 2, H / 2 - 20);
+          ctx.scale(scale, scale);
+          ctx.font = "bold 52px monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.strokeStyle = "rgba(0,0,0,0.9)";
+          ctx.lineWidth = 6;
+          ctx.strokeText("FIGHT!", 0, 0);
+          ctx.fillStyle = "#d4a853";
+          ctx.fillText("FIGHT!", 0, 0);
+          ctx.restore();
+        }
+      }
+
+      // WINNER! text
+      if (winnerTextBorn > 0) {
+        const elapsed = now - winnerTextBorn;
+        if (elapsed < WINNER_TEXT_DUR) {
+          const t = elapsed / WINNER_TEXT_DUR;
+          const opacity = t < 0.08 ? t / 0.08 : t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
+          const yOff = t < 0.08 ? (1 - t / 0.08) * 20 : 0;
+          ctx.save();
+          ctx.globalAlpha = opacity;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          // Winner label
+          ctx.font = "bold 40px monospace";
+          ctx.strokeStyle = "rgba(0,0,0,0.9)";
+          ctx.lineWidth = 5;
+          ctx.strokeText(winnerName + " WINS!", W / 2, H / 2 - 20 + yOff);
+          ctx.fillStyle = winnerColor;
+          ctx.fillText(winnerName + " WINS!", W / 2, H / 2 - 20 + yOff);
+          // Subtext
+          ctx.font = "bold 16px monospace";
+          ctx.strokeStyle = "rgba(0,0,0,0.8)";
+          ctx.lineWidth = 3;
+          ctx.strokeText("GLORY IN THE ARENA", W / 2, H / 2 + 20 + yOff);
+          ctx.fillStyle = "#e8dcc8";
+          ctx.fillText("GLORY IN THE ARENA", W / 2, H / 2 + 20 + yOff);
+          ctx.restore();
+        }
+      }
+    }
+
+    function drawCritScreenFlash(now: number) {
+      if (critFlashBorn === 0) return;
+      const elapsed = now - critFlashBorn;
+      if (elapsed >= CRIT_SCREEN_DUR) return;
+      const t = elapsed / CRIT_SCREEN_DUR;
+      const opacity = t < 0.2 ? (t / 0.2) * 0.18 : 0.18 * (1 - (t - 0.2) / 0.8);
+      ctx.save();
+      ctx.globalAlpha = opacity;
+      ctx.fillStyle = "#8b1a1a";
+      ctx.fillRect(-SHAKE_MAG, -SHAKE_MAG, W + SHAKE_MAG * 2, H + SHAKE_MAG * 2);
+      ctx.restore();
+    }
+
     let lastTime = 0;
     let rafId = 0;
 
@@ -618,7 +697,8 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
           p1.state = "idle"; p1.stateStart = now;
           p2.state = "idle"; p2.stateStart = now;
           phase = "fight";
-          nextHitAt = now + 280;
+          fightTextBorn = now;
+          nextHitAt = now + 800; // longer pause after FIGHT! text
         }
       }
 
@@ -646,7 +726,10 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
             p1.hpTarget = entry.hp1After;
             p2.hpTarget = entry.hp2After;
 
-            if (entry.isCrit) shakeStart = perfNow;
+            if (entry.isCrit) {
+              shakeStart = perfNow;
+              critFlashBorn = perfNow;
+            }
 
             if (entry.isCrit) audio?.playSfx("crit");
             audio?.playSfx("hit");
@@ -686,6 +769,14 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
 
         const deadFighter = !p1.alive ? p1 : p2;
         const deathElapsed = now - deadFighter.stateStart;
+        if (deadFighter.state === "death" && deathElapsed > DEATH_MS + 200 && winnerTextBorn === 0) {
+          // Show winner text partway through the post-death pause
+          winnerName = result.winner === "p1" ? "P1" : "P2";
+          const winnerFighter = result.winner === "p1" ? p1 : p2;
+          const colorMap: Record<FighterColor, string> = { red: "#ef4444", blue: "#60a5fa", gold: "#d4a853" };
+          winnerColor = colorMap[winnerFighter.color];
+          winnerTextBorn = performance.now();
+        }
         if (deadFighter.state === "death" && deathElapsed > DEATH_MS + POST_DEATH_MS) {
           phase = "done";
         }
@@ -721,6 +812,8 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
       drawFighter(p2, now);
       drawDamageNums(now);
       drawHitCounter();
+      drawOverlayText(now);
+      drawCritScreenFlash(now);
 
       ctx.restore();
     }
@@ -752,4 +845,5 @@ export default function CanvasFight({ result, p1Color, p2Color, onDone }: Canvas
     />
   );
 }
+
 
