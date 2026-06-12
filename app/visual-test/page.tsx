@@ -8,9 +8,9 @@
 // Same stat-allocator skeleton as /training, but the FIGHT button launches
 // the Street Fighter-style canvas renderer (CanvasFight) instead of FightReplay.
 
-import { useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { simulateFight, FightResult } from "@/lib/fight-engine";
+import { simulateFight, FightResult, RoundLog } from "@/lib/fight-engine";
 import {
   GladiatorStats,
   STAT_LABELS,
@@ -18,10 +18,13 @@ import {
   MAX_STAT,
   MIN_STAT,
 } from "@/lib/contract";
-import type { FighterColor } from "./CanvasFight";
+import { drawDebugSheet, type FighterColor } from "@/components/combat-replay/sprites";
 
-// Dynamic import â€” canvas renderer must not SSR
-const CanvasFight = dynamic(() => import("./CanvasFight"), { ssr: false });
+// Dynamic import: canvas renderer must not SSR
+const CombatReplay = dynamic(
+  () => import("@/components/combat-replay/CombatReplay"),
+  { ssr: false }
+);
 
 // â”€â”€ Defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -185,7 +188,7 @@ function CharPicker({
               gap: 2,
               lineHeight: 1,
             }}
-            aria-label={`${opt.sublabel} gladiator`}
+            aria-label={`${opt.sublabel} gladaitor`}
           >
             <span style={{ fontSize: "0.65rem", fontWeight: 900, letterSpacing: "0.05em" }}>{opt.label}</span>
             <span style={{ fontSize: "0.5rem", opacity: 0.8 }}>{opt.sublabel}</span>
@@ -280,7 +283,90 @@ function GladPanel({
 
 // â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-type Step = "configure" | "replay";
+
+// ── /visual-test harness — auto modes for review + screenshot capture ────────
+//   ?auto=crit   loop-simulates crit-heavy builds until a non-lethal crit lands
+//   ?auto=combo  loop-simulates a speed-gap-8 build until a 4x combo run exists
+//   ?auto=draw   synthesized mutual-kill FightResult (real draws are unreachable
+//                in simulateFight — mid-tick break; see visual-notes/REPLAY-NOTES.md)
+//   ?auto=sheet  full procedural sprite-bank debug sheet
+//   Optional: &p1=red|blue|gold &p2=... &p1name=... &p2name=...
+
+const HARNESS_BUILDS: Record<"crit" | "combo", [GladiatorStats, GladiatorStats]> = {
+  crit: [
+    { strength: 7, speed: 5, defense: 1, intel: 2, luck: 10 },
+    { strength: 6, speed: 5, defense: 2, intel: 2, luck: 10 },
+  ],
+  combo: [
+    { strength: 4, speed: 10, defense: 1, intel: 1, luck: 9 },
+    { strength: 7, speed: 2, defense: 9, intel: 4, luck: 3 },
+  ],
+};
+
+function findFight(
+  builds: [GladiatorStats, GladiatorStats],
+  ok: (r: FightResult) => boolean,
+  tries = 1200
+): FightResult {
+  let last = simulateFight(builds[0], builds[1]);
+  for (let i = 0; i < tries; i++) {
+    if (ok(last)) return last;
+    last = simulateFight(builds[0], builds[1]);
+  }
+  return last;
+}
+
+function synthDrawResult(): FightResult {
+  const log: RoundLog[] = [];
+  let hp1 = 100;
+  let hp2 = 100;
+  const hits: { attacker: "p1" | "p2"; dmg: number; crit?: boolean }[] = [
+    { attacker: "p1", dmg: 14 },
+    { attacker: "p2", dmg: 12 },
+    { attacker: "p1", dmg: 22, crit: true },
+    { attacker: "p2", dmg: 11 },
+    { attacker: "p1", dmg: 13 },
+    { attacker: "p2", dmg: 26, crit: true },
+    { attacker: "p1", dmg: 15 },
+    { attacker: "p2", dmg: 13 },
+    { attacker: "p1", dmg: 16 },
+    { attacker: "p2", dmg: 12 },
+  ];
+  hits.forEach((h, i) => {
+    if (h.attacker === "p1") hp2 -= h.dmg;
+    else hp1 -= h.dmg;
+    log.push({
+      round: i + 1, attacker: h.attacker, damage: h.dmg, isCrit: !!h.crit,
+      hp1After: hp1, hp2After: hp2, attackedFirst: i === 0,
+      isDoubleAttack: false, speedGap: 0, isCombo: false, comboStep: 0,
+    });
+  });
+  // the final blow — both constructs fall on the same impact
+  log.push({
+    round: log.length + 1, attacker: "p1", damage: Math.max(hp1, hp2), isCrit: true,
+    hp1After: 0, hp2After: 0, attackedFirst: false,
+    isDoubleAttack: false, speedGap: 0, isCombo: false, comboStep: 0,
+  });
+  return {
+    winner: "draw", rounds: log.length, hp1Final: 0, hp2Final: 0, log,
+    totalDamageByP1: 100, totalDamageByP2: 100, critsP1: 2, critsP2: 1,
+  };
+}
+
+function SpriteSheetView() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (ref.current) drawDebugSheet(ref.current, 2);
+  }, []);
+  return (
+    <canvas
+      ref={ref}
+      style={{ width: "100%", height: "auto", imageRendering: "pixelated", display: "block" }}
+    />
+  );
+}
+
+type Step = "configure" | "replay" | "sheet";
 
 export default function VisualTestPage() {
   const [step, setStep] = useState<Step>("configure");
@@ -289,6 +375,47 @@ export default function VisualTestPage() {
   const [color1, setColor1] = useState<FighterColor>("red");
   const [color2, setColor2] = useState<FighterColor>("blue");
   const [fightResult, setFightResult] = useState<FightResult | null>(null);
+  const [name1, setName1] = useState("kpx");
+  const [name2, setName2] = useState("degenslayer");
+
+  // ── auto harness (see header comment) ──────────────────────────────────────
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const okColor = (c: string | null): c is FighterColor =>
+      c === "red" || c === "blue" || c === "gold";
+    const c1 = q.get("p1");
+    const c2 = q.get("p2");
+    if (okColor(c1)) setColor1(c1);
+    if (okColor(c2)) setColor2(c2);
+    const n1 = q.get("p1name");
+    const n2 = q.get("p2name");
+    if (n1) setName1(n1);
+    if (n2) setName2(n2);
+
+    const auto = q.get("auto");
+    if (!auto) return;
+    if (auto === "sheet") {
+      setStep("sheet");
+      return;
+    }
+    let result: FightResult | null = null;
+    if (auto === "draw") {
+      result = synthDrawResult();
+    } else if (auto === "crit") {
+      result = findFight(HARNESS_BUILDS.crit, (r) =>
+        r.log.some((e) => e.isCrit && e.hp1After > 0 && e.hp2After > 0)
+      );
+    } else if (auto === "combo") {
+      result = findFight(HARNESS_BUILDS.combo, (r) =>
+        r.log.some((e) => e.comboStep >= 4)
+      );
+    }
+    if (result) {
+      setFightResult(result);
+      setStep("replay");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const used1 = Object.values(stats1).reduce((a, b) => a + b, 0);
   const used2 = Object.values(stats2).reduce((a, b) => a + b, 0);
@@ -414,7 +541,7 @@ export default function VisualTestPage() {
 
               {!bothReady && (
                 <p style={{ fontSize: "0.7rem", color: "#4b3a28", textAlign: "center" }}>
-                  Allocate all 25 points for each gladiator to unlock
+                  Allocate all 25 points for each gladaitor to unlock
                 </p>
               )}
             </div>
@@ -422,6 +549,8 @@ export default function VisualTestPage() {
         )}
 
         {/* â”€â”€ Replay step â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {step === "sheet" && <SpriteSheetView />}
+
         {step === "replay" && fightResult && (
           <div>
             {/* Winner label */}
@@ -439,12 +568,14 @@ export default function VisualTestPage() {
               WATCH THE FIGHT
             </div>
 
-            <CanvasFight
+            <CombatReplay
               result={fightResult}
               p1Color={color1}
               p2Color={color2}
+              p1Name={name1}
+              p2Name={name2}
               onDone={() => {
-                // show result overlay after death animation
+                // replay finished — stats below are already visible
               }}
             />
 
@@ -465,7 +596,7 @@ export default function VisualTestPage() {
               <span>
                 Winner:{" "}
                 <span style={{ color: "#e8dcc8", fontWeight: "bold" }}>
-                  {fightResult.winner === "p1" ? "P1" : "P2"}
+                  {fightResult.winner === "draw" ? "DRAW" : fightResult.winner === "p1" ? "P1" : "P2"}
                 </span>
               </span>
               <span>
