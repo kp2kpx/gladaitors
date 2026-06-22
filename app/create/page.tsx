@@ -280,7 +280,7 @@ export default function CreateMatch() {
             />
             <span className="text-gray-400 font-bold">USDC</span>
           </div>
-          <p className="text-xs text-gray-600 mt-2">Minimum 1 USDC. Winner takes 90% of pot. Loser forfeits bet.</p>
+          <p className="text-xs text-gray-600 mt-2">Minimum 1 USDC. Winner takes the pot. Loser forfeits bet.</p>
         </div>
 
         {/* Stat allocation */}

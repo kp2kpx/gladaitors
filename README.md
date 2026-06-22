@@ -19,7 +19,7 @@ Farcaster Mini App. Configure a cyber-gladiator, bet USDC, fight to the death on
 
 | Mode | Description |
 |------|-------------|
-| Create Fight | On-chain USDC wager. Set bet, share link, opponent joins. Winner takes 90%. |
+| Create Fight | On-chain USDC wager. Set bet, share link, opponent joins. Winner takes the pot. |
 | Free Fight | Off-chain, no stake. Cast on Farcaster to enter. Earns points. |
 | Fight Aitor | Challenge the house AI. Fixed stat build. Good warm-up. Earns points. |
 

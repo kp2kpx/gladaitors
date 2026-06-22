@@ -11,7 +11,7 @@
 import { baseSepolia, base } from "viem/chains";
 import type { Chain } from "viem";
 
-const isMainnet = process.env.NEXT_PUBLIC_CHAIN === "mainnet";
+export const isMainnet = process.env.NEXT_PUBLIC_CHAIN === "mainnet";
 
 export const activeChain: Chain = isMainnet ? base : baseSepolia;
 

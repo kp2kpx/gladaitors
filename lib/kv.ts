@@ -240,3 +240,55 @@ export async function markPointsAwarded(
   const key = `points_awarded:${action}:${matchId}:${wallet.toLowerCase()}`;
   await kv.set(key, 1, { ex: POINTS_AWARDED_TTL });
 }
+
+// --------------------------------------------------------------------------
+// Paid match stats (KV-backed; fight resolved server-side)
+// --------------------------------------------------------------------------
+
+export interface PaidMatchStats {
+  matchId: string;
+  player1?: string;
+  player2?: string;
+  stats1?: FreeMatch["stats1"];
+  stats2?: FreeMatch["stats2"];
+  winner?: string;
+  resolvedAt?: number;
+}
+
+const PAID_MATCH_TTL = 60 * 60 * 24; // 24h
+
+export async function getPaidMatchStats(
+  matchId: string
+): Promise<PaidMatchStats | null> {
+  return await kv.get<PaidMatchStats>(`paid_match:${matchId}`);
+}
+
+export async function setPaidMatchStats(data: PaidMatchStats): Promise<void> {
+  await kv.set(`paid_match:${data.matchId}`, data, { ex: PAID_MATCH_TTL });
+}
+
+// --------------------------------------------------------------------------
+// Farcaster notification tokens
+// --------------------------------------------------------------------------
+
+export interface NotifTokenRecord {
+  notificationUrl: string;
+  token: string;
+}
+
+export async function getNotifToken(
+  fid: number
+): Promise<NotifTokenRecord | null> {
+  return await kv.get<NotifTokenRecord>(`notif_token:${fid}`);
+}
+
+export async function setNotifToken(
+  fid: number,
+  record: NotifTokenRecord
+): Promise<void> {
+  await kv.set(`notif_token:${fid}`, record);
+}
+
+export async function deleteNotifToken(fid: number): Promise<void> {
+  await kv.del(`notif_token:${fid}`);
+}

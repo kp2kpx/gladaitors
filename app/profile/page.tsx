@@ -73,7 +73,17 @@ function formatDate(ts: number) {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { isAuthed, isInMiniApp, logout, address, fid, username, pfpUrl } = useFarcasterAuth();
+  const {
+    isAuthed,
+    isInMiniApp,
+    isContextReady,
+    isWalletReady,
+    logout,
+    address,
+    fid,
+    username,
+    pfpUrl,
+  } = useFarcasterAuth();
 
   const [tab, setTab] = useState<MatchTab>("matches");
   const [balances, setBalances] = useState<Balances | null>(null);
@@ -91,7 +101,10 @@ export default function ProfilePage() {
 
   // --- Load balances + pending withdrawal amount ---
   const loadBalances = useCallback(async () => {
-    if (!address) return;
+    if (!address) {
+      setLoadingBalances(false);
+      return;
+    }
     setLoadingBalances(true);
     try {
       const [ethRaw, usdcRaw, pendingRaw, leaderboard] = await Promise.all([
@@ -133,7 +146,10 @@ export default function ProfilePage() {
 
   // --- Load on-chain match history ---
   const loadOnChainMatches = useCallback(async () => {
-    if (!address) return;
+    if (!address) {
+      setLoadingMatches(false);
+      return;
+    }
     setLoadingMatches(true);
     try {
       const addr = address.toLowerCase() as `0x${string}`;
@@ -280,7 +296,10 @@ export default function ProfilePage() {
 
   // --- Load free match history ---
   const loadFreeMatches = useCallback(async () => {
-    if (!fid && !address) return;
+    if (!fid && !address) {
+      setLoadingFree(false);
+      return;
+    }
     setLoadingFree(true);
     try {
       const res = await fetch(
@@ -296,17 +315,47 @@ export default function ProfilePage() {
   }, [fid, address]);
 
   useEffect(() => {
-    if (isAuthed && address) {
+    if (!isContextReady || !isWalletReady || !isAuthed) return;
+
+    if (address) {
       loadBalances();
       loadOnChainMatches();
+      return;
     }
-  }, [isAuthed, address, loadBalances, loadOnChainMatches]);
+
+    // Authed but no wallet after readiness: show empty balances, not skeletons.
+    setLoadingBalances(false);
+    setLoadingMatches(false);
+    setBalances({ eth: "0.0000", usdc: "0.00", points: 0 });
+    setOnChainMatches([]);
+    setPendingUSDC(0n);
+  }, [
+    isContextReady,
+    isWalletReady,
+    isAuthed,
+    address,
+    loadBalances,
+    loadOnChainMatches,
+  ]);
 
   useEffect(() => {
-    if (isAuthed && (fid || address)) {
+    if (!isContextReady || !isWalletReady || !isAuthed) return;
+
+    if (fid || address) {
       loadFreeMatches();
+      return;
     }
-  }, [isAuthed, fid, address, loadFreeMatches]);
+
+    setLoadingFree(false);
+    setFreeMatches([]);
+  }, [
+    isContextReady,
+    isWalletReady,
+    isAuthed,
+    fid,
+    address,
+    loadFreeMatches,
+  ]);
 
   // --- Logout (web only — hidden inside Mini App) ---
   function handleLogout() {

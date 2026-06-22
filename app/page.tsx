@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useReadContract } from "wagmi";
 import { formatUnits } from "viem";
 import Image from "next/image";
-import sdk from "@farcaster/miniapp-sdk";
 import WalletButton from "@/components/WalletButton";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -20,10 +19,6 @@ export default function Home() {
   // Unified identifier: wallet address if connected, fid: prefix for wallet-less Farcaster users
   const playerId = address ?? (fid ? `fid:${fid}` : undefined);
   const [publicFreeMatches, setPublicFreeMatches] = useState<FreeMatch[]>([]);
-
-  useEffect(() => {
-    sdk.actions.ready().catch(() => {});
-  }, []);
 
   // On-chain paid open matches
   const { data: openIds, refetch } = useReadContract({

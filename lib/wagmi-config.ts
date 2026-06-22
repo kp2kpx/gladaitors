@@ -1,12 +1,12 @@
 import { createConfig, http } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
+import { farcasterMiniAppAsync } from "./farcaster-connector";
 
-// No wallet connectors registered here — MiniKitProvider handles autoConnect
-// via @farcaster/miniapp-wagmi-connector when running inside Warpcast/Farcaster.
-// Contract reads/writes still go through wagmi, just no generic wallet UI.
+// Custom Farcaster connector registered here. MiniKitProvider has autoConnect=false;
+// useFarcasterAuth calls connect() explicitly after MiniKit context resolves.
 export const wagmiConfig = createConfig({
   chains: [baseSepolia],
-  connectors: [],
+  connectors: [farcasterMiniAppAsync()],
   transports: {
     [baseSepolia.id]: http("https://sepolia.base.org"),
   },

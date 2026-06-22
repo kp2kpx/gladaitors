@@ -52,7 +52,7 @@ export default function Docs() {
             <p style={{ color: ink }}>
               GLADAITOR is a Farcaster Mini App where you configure a cyber-gladaitor chibi and pit
               it against another player. Your gladaitors fight autonomously until one reaches 0 HP.
-              Winner takes 90% of the pot. House takes 10%. No luck required — only build strategy.
+              Winner takes the pot. No luck required — only build strategy.
             </p>
           </section>
 
@@ -75,7 +75,7 @@ export default function Docs() {
                 <p style={{ color: ink }}>
                   On-chain fight with a real USDC wager on Base. You set the bet amount, lock your
                   stats, and share a join link. Opponent matches the bet and submits their build.
-                  Winner takes 90%, house takes 10%. Results recorded on-chain permanently.
+                  Winner takes the pot. Results recorded on-chain permanently.
                   Winnings are claimable from your profile page — gasless, sponsored by the house.
                 </p>
               </div>
@@ -213,7 +213,6 @@ export default function Docs() {
               {[
                 "Minimum bet: 1 USDC",
                 "Both players must bet the same amount",
-                "House cut: 10% of total pot",
                 "Once a fight is created, the bet is locked in the contract",
                 "Once both gladaitors are submitted, either player can resolve the fight on-chain.",
               ].map((rule) => (

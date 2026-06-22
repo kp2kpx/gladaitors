@@ -1,9 +1,10 @@
 {
   "name": "gladaitors",
-  "description": "GLADAITORS — Farcaster Mini App. Configure a cyber-gladiator, bet USDC, fight to the death on Base.",
+  "description": "GLADAITORS Farcaster Mini App. Configure a cyber-gladiator, bet USDC, fight to the death on Base.",
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "node scripts/verify-gladaitors.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

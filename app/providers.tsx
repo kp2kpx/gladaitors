@@ -4,9 +4,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 import { wagmiConfig } from "@/lib/wagmi-config";
 import { MiniKitProvider } from "@coinbase/onchainkit/minikit";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import sdk from "@farcaster/miniapp-sdk";
 import { AudioProvider } from "@/lib/useAudio";
+
+function MiniAppReady() {
+  useEffect(() => {
+    sdk.actions.ready().catch(() => {});
+  }, []);
+  return null;
+}
 
 // Pages that should never start background music.
 // The root AudioProvider skips its document-level unlock listener on these routes.
@@ -26,9 +34,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             than sdk.isInMiniApp() (which has a 1s timeout that fires too early
             on farcaster.xyz web, causing the built-in AutoConnect to skip). */}
         <MiniKitProvider enabled={true} autoConnect={false}>
-          {/* AudioProvider wraps the entire app so any component can access
-              shared audio state (mute toggle, sfx) without prop-drilling.
-              disableMusic suppresses background music on sandbox/non-game routes. */}
+          <MiniAppReady />
           <AudioProvider config={{ disableMusic }}>
             {children}
           </AudioProvider>
