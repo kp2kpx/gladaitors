@@ -38,4 +38,8 @@ Production is pinned to the Jun 6 rollback deployment. Do not run `vercel deploy
 
 ## Stablecoin home
 
-Stablecoin (`kp2kpx/2nd` `main`) deploys to a separate Vercel project, not `gladaitors.vercel.app`.
+Stablecoin (`kp2kpx/2nd` `main`) deploys to a separate Vercel project:
+
+- **Project:** `kp2kpxs-projects/base-stablecoin-viz`
+- **URL:** `https://base-stablecoin-viz.vercel.app` (after first deploy from `2nd` `main`)
+- **Never** point this repo or `kp2kpx/2nd` at the gladaitors Vercel project.
